@@ -175,7 +175,7 @@ public sealed class ScoreServer : IAsyncDisposable
     private static string Page()
     {
         using var stream = Assembly.GetExecutingAssembly().GetManifestResourceStream("web/phone.html");
-        if (stream is null) return "<h1>Pool Score Tracker</h1><p>The phone view is missing from this build.</p>";
+        if (stream is null) return "<h1>Pool Score</h1><p>The phone view is missing from this build.</p>";
 
         using var reader = new StreamReader(stream);
         return reader.ReadToEnd();

@@ -10,8 +10,8 @@
     <RootNamespace>PoolScoreTracker</RootNamespace>
     <ApplicationIcon>app.ico</ApplicationIcon>
 
-    <Product>Pool Score Tracker</Product>
-    <AssemblyTitle>Pool Score Tracker</AssemblyTitle>
+    <Product>Pool Score</Product>
+    <AssemblyTitle>Pool Score</AssemblyTitle>
     <Version>1.0.0</Version>
 
     <!-- One file to hand over: the runtime and the web assets travel inside it. -->

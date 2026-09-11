@@ -83,7 +83,7 @@ public sealed class MainWindow : Form
     {
         _session = session;
 
-        Text = "Pool Score Tracker";
+        Text = "Pool Score";
         ClientSize = new Size(960, 1000);
         MinimumSize = new Size(620, 700);
         StartPosition = FormStartPosition.CenterScreen;
@@ -457,7 +457,7 @@ public sealed class MainWindow : Form
     {
         var answer = MessageBox.Show(this,
             $"Reset all {_session.Config.Label} scores?\n\nPlayers and the line-up are kept.",
-            "Pool Score Tracker", MessageBoxButtons.YesNo, MessageBoxIcon.Warning,
+            "Pool Score", MessageBoxButtons.YesNo, MessageBoxIcon.Warning,
             MessageBoxDefaultButton.Button2);
 
         if (answer == DialogResult.Yes) _session.ResetScores();
@@ -517,7 +517,7 @@ public sealed class MainWindow : Form
 
         if (!_session.TryCommit(out var problem) && problem is not null)
         {
-            MessageBox.Show(this, problem, "Pool Score Tracker",
+            MessageBox.Show(this, problem, "Pool Score",
                 MessageBoxButtons.OK, MessageBoxIcon.Information);
         }
     }
