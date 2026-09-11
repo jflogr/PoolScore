@@ -32,7 +32,6 @@ public sealed class MainWindow : Form
     private readonly ListView _matches = NewList();
 
     private ToolStripButton _undo = null!;
-    private ToolStripButton _newMatch = null!;
 
     private PlayersDialog? _players;
 
@@ -47,7 +46,7 @@ public sealed class MainWindow : Form
 
     private readonly PictureBox _qrView = new()
     {
-        Size = new Size(156, 156),
+        Size = new Size(120, 120),
         SizeMode = PictureBoxSizeMode.Zoom,
         BackColor = Color.White,
         Margin = new Padding(0, 4, 0, 6),
@@ -98,10 +97,13 @@ public sealed class MainWindow : Form
         _scoring.AwayDelta += (_, delta) => _session.Adjust(Side.Away, delta);
         _scoring.ActionClicked += (_, _) => FinishSet();
 
-        // Added back to front: Fill first, then the strips above it.
+        // Docking resolves from the last control added outwards, so this reads
+        // backwards: toolbar at the very top, then the scoreboard, the phone
+        // strip along the bottom, and the tabs filling what is left.
         Controls.Add(_tabs);
-        Controls.Add(_commands);
+        Controls.Add(BuildPhoneStrip());
         Controls.Add(_scoring);
+        Controls.Add(_commands);
 
         _save.Tick += (_, _) =>
         {
@@ -242,17 +244,53 @@ public sealed class MainWindow : Form
         var icon = (int)Math.Round(24 * DeviceDpi / 96.0);
         _commands.ImageScalingSize = new Size(icon, icon);
 
-        _newMatch = Command("New match", Icons.AddCircle, icon, _session.StartNewMatch);
-        _undo = Command("Undo last", Icons.Undo, icon, _session.UndoLastCommit);
+        _undo = Command("Previous match", Icons.Undo, icon, _session.UndoLastCommit);
 
-        _commands.Items.Add(_newMatch);
-        _commands.Items.Add(_undo);
-        _commands.Items.Add(Command("Swap break", Icons.SwapHoriz, icon, _session.SwapBreak));
-        _commands.Items.Add(new ToolStripSeparator());
         _commands.Items.Add(Command("Players", Icons.Group, icon, ShowPlayers));
-        _commands.Items.Add(Command("Banner", Icons.Tv, icon, ToggleBanner));
-        _commands.Items.Add(new ToolStripSeparator());
+        _commands.Items.Add(Command("Swap break", Icons.SwapHoriz, icon, _session.SwapBreak));
         _commands.Items.Add(Command("Reset", Icons.RestartAlt, icon, ResetScores));
+        _commands.Items.Add(_undo);
+
+        // Off on its own at the far end: it opens a window rather than
+        // changing the score, so it does not belong with the rest.
+        var banner = Command("Banner", Icons.Tv, icon, ToggleBanner);
+        banner.Alignment = ToolStripItemAlignment.Right;
+        _commands.Items.Add(banner);
+    }
+
+    /// <summary>
+    /// The scan-to-watch code, along the bottom where it is always in view.
+    /// It lived on the settings tab, which meant hunting for it whenever
+    /// somebody new wanted to follow the game.
+    /// </summary>
+    private Control BuildPhoneStrip()
+    {
+        var strip = new Panel
+        {
+            Dock = DockStyle.Bottom,
+            Height = _qrView.Height + 20,
+            BackColor = Paper,
+            Padding = new Padding(10)
+        };
+
+        // Stays hidden until the server is up and there is a code to show,
+        // rather than flashing an empty white square on startup.
+        _qrView.Dock = DockStyle.Left;
+
+        var caption = new FlowLayoutPanel
+        {
+            Dock = DockStyle.Fill,
+            FlowDirection = FlowDirection.TopDown,
+            WrapContents = false,
+            Padding = new Padding(14, 8, 0, 0)
+        };
+
+        caption.Controls.Add(Heading("Watch on a phone"));
+        caption.Controls.Add(_phoneLabel);
+
+        strip.Controls.Add(caption);
+        strip.Controls.Add(_qrView);
+        return strip;
     }
 
     private static ToolStripButton Command(string text, string iconPath, int iconSize, Action onClick) =>
@@ -367,11 +405,6 @@ public sealed class MainWindow : Form
 
         right.Controls.Add(Heading("Line-up"));
         right.Controls.Add(_lineup);
-        // Address above the code: it is the fallback when a camera will not
-        // scan, so it must not be the thing that scrolls out of sight.
-        right.Controls.Add(Heading("Watch on a phone"));
-        right.Controls.Add(_phoneLabel);
-        right.Controls.Add(_qrView);
 
         split.Controls.Add(left, 0, 0);
         split.Controls.Add(right, 1, 0);
@@ -446,12 +479,15 @@ public sealed class MainWindow : Form
 
     private void SyncCommands(Session session)
     {
-        // Committing a set and undoing one only exist in a round robin; a
-        // one-off match just starts again.
         var roundRobin = session.IsRoundRobin;
 
-        _undo.Visible = roundRobin;
-        _newMatch.Visible = !roundRobin;
+        // Going back a match only makes sense in a round robin, once one has
+        // been played, and while the current one is untouched - otherwise it
+        // would throw away a score in progress.
+        var current = session.CurrentSet();
+        _undo.Visible = roundRobin
+            && session.RoundRobin.Scores.Any(score => score.Committed)
+            && (current is not { } playing || (playing.Score.Home == 0 && playing.Score.Away == 0));
 
         // The centre button only appears once a side has won, so it can say
         // what actually happens next rather than "commit".
