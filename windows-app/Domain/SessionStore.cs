@@ -65,23 +65,39 @@ public static class SessionStore
         PropertyNamingPolicy = JsonNamingPolicy.CamelCase
     };
 
+    private static readonly string LocalAppData =
+        Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData);
+
     /// <summary>
     /// One session per Windows account, wherever the exe happens to be. Kept
     /// out of the app's own folder so the exe stays a single file you can drop
     /// anywhere without dragging a second one along behind it.
     /// </summary>
-    public static string Path { get; } = System.IO.Path.Combine(
-        Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData),
-        "PoolScoreTracker",
-        "session.json");
+    public static string Path { get; } =
+        System.IO.Path.Combine(LocalAppData, "PoolScore", "session.json");
+
+    /// <summary>
+    /// Where the builds before the PoolScore rename kept theirs. Read from as a
+    /// starting point and never written to, so an older exe still opens on its
+    /// own players and scores if this one has to be abandoned.
+    /// </summary>
+    public static string Previous { get; } =
+        System.IO.Path.Combine(LocalAppData, "PoolScoreTracker", "session.json");
 
     public static Session Load()
     {
         try
         {
-            if (!File.Exists(Path)) return new Session();
+            // Our own file if we have one; otherwise take the last version's as
+            // a starting point. Saves only ever go to ours, so the old app is
+            // left exactly as it was and stays usable if this one goes wrong.
+            var source = File.Exists(Path) ? Path
+                : File.Exists(Previous) ? Previous
+                : null;
 
-            var file = JsonSerializer.Deserialize<SessionFile>(File.ReadAllText(Path), Format);
+            if (source is null) return new Session();
+
+            var file = JsonSerializer.Deserialize<SessionFile>(File.ReadAllText(source), Format);
             return file is null ? new Session() : Session.Restore(file);
         }
         catch (Exception)

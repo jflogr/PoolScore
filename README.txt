@@ -88,9 +88,16 @@ TWO WAYS TO RUN IT
    without anything else running.
 
    Players and scores are remembered between runs in one file:
-     %LOCALAPPDATA%\PoolScoreTracker\session.json
+     %LOCALAPPDATA%\PoolScore\session.json
    One per Windows account, so the exe stays a single file you can copy
    anywhere. A new install starts with five default names to rename.
+
+   Builds before the PoolScore rename kept theirs under a PoolScoreTracker
+   folder instead. If this app finds no file of its own it reads that one to
+   start from, but it only ever writes its own - so the older exe keeps its
+   players and scores exactly as they were, and still works if you ever need
+   to go back to it. Delete the PoolScore folder to start over from the
+   defaults.
 
 2. INSTALLED BROWSER APP - see INSTALL IT ONCE below.
    The original web version, installed into Windows from the browser. Still
