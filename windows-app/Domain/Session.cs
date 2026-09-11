@@ -52,7 +52,7 @@ public sealed record ScoreView(
 public sealed class Session
 {
     private static readonly string[] DefaultRoster =
-        ["Player 1", "Player 2", "Player 3", "Player 4", "Player 5"];
+        ["John", "Rob", "Shane", "Jim", "Richard"];
 
     private readonly Dictionary<string, ModeState> _modes = [];
     private Dictionary<string, string> _names = [];

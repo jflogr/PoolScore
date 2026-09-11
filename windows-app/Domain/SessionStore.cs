@@ -65,45 +65,15 @@ public static class SessionStore
         PropertyNamingPolicy = JsonNamingPolicy.CamelCase
     };
 
-    private const string FileName = "session.json";
-
-    /// <summary>One session per Windows account, wherever the exe happens to be.</summary>
-    public static string PerUser { get; } = System.IO.Path.Combine(
+    /// <summary>
+    /// One session per Windows account, wherever the exe happens to be. Kept
+    /// out of the app's own folder so the exe stays a single file you can drop
+    /// anywhere without dragging a second one along behind it.
+    /// </summary>
+    public static string Path { get; } = System.IO.Path.Combine(
         Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData),
         "PoolScoreTracker",
-        FileName);
-
-    /// <summary>
-    /// Where this run keeps its session. A session.json sitting next to the exe
-    /// wins, which is how an app gets handed over with its players and scores
-    /// already in it - copy those two files together and everything travels.
-    ///
-    /// Declared after PerUser on purpose: initialisers run in order, and this
-    /// one reads it.
-    /// </summary>
-    public static string Path { get; } = Portable() ?? PerUser;
-
-    /// <summary>True when this run is reading and writing beside the exe.</summary>
-    public static bool IsPortable => Path != PerUser;
-
-    private static string? Portable()
-    {
-        try
-        {
-            // ProcessPath rather than the assembly location: a single-file
-            // app runs from a temporary extraction folder, and that is not
-            // where the exe someone double-clicked actually lives.
-            var folder = System.IO.Path.GetDirectoryName(Environment.ProcessPath);
-            if (folder is null) return null;
-
-            var beside = System.IO.Path.Combine(folder, FileName);
-            return File.Exists(beside) ? beside : null;
-        }
-        catch (Exception)
-        {
-            return null;
-        }
-    }
+        "session.json");
 
     public static Session Load()
     {

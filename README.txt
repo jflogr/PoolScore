@@ -87,25 +87,10 @@ TWO WAYS TO RUN IT
    It serves the phone view itself, so phones on the same wifi can watch
    without anything else running.
 
-   WHERE THE PLAYERS AND SCORES LIVE
-   Everything - the player list, the line-ups, every format's scores and the
-   house rules - is one file. Normally:
+   Players and scores are remembered between runs in one file:
      %LOCALAPPDATA%\PoolScoreTracker\session.json
-   one per Windows account, so the exe itself stays a file you can drop
-   anywhere.
-
-   HANDING THE APP OVER WITH THE DATA IN IT
-   If a session.json sits in the same folder as the exe, that one is used
-   instead - read and written - so the pair travel together. To make one:
-     1. Set the players and format up the way you want them.
-     2. Match settings tab -> "Copy beside the app".
-     3. Send the folder, or zip the exe and session.json together.
-   Whoever opens it starts with those players and scores already loaded, and
-   their own changes stay in that folder rather than on their account.
-
-   Two things to know: the copy is only picked up the next time the app
-   starts, and Windows will not let the app write beside itself from a
-   protected folder such as Program Files - keep it somewhere ordinary.
+   One per Windows account, so the exe stays a single file you can copy
+   anywhere. A new install starts with five default names to rename.
 
 2. INSTALLED BROWSER APP - see INSTALL IT ONCE below.
    The original web version, installed into Windows from the browser. Still

@@ -57,15 +57,6 @@ public sealed class MainWindow : Form
         Visible = false
     };
 
-    private readonly Label _storeLabel = new()
-    {
-        AutoSize = true,
-        MaximumSize = new Size(260, 0),
-        ForeColor = ColorTranslator.FromHtml("#5b6b7d"),
-        Font = new Font(FontFamily.GenericSansSerif, 9f),
-        Margin = new Padding(0, 0, 0, 6)
-    };
-
     private readonly Label _phoneLabel = new()
     {
         ForeColor = ColorTranslator.FromHtml("#5b6b7d"),
@@ -412,23 +403,6 @@ public sealed class MainWindow : Form
         left.Controls.Add(Heading("Names"));
         left.Controls.Add(_nameBox);
 
-        left.Controls.Add(Heading("This session"));
-        left.Controls.Add(_storeLabel);
-
-        var portable = new Button
-        {
-            Text = "Copy beside the app",
-            AutoSize = true,
-            AutoSizeMode = AutoSizeMode.GrowAndShrink,
-            MinimumSize = new Size(0, TouchHeight),
-            Padding = new Padding(12, 0, 12, 0),
-            FlatStyle = FlatStyle.System,
-            Font = new Font(FontFamily.GenericSansSerif, 10f)
-        };
-
-        portable.Click += (_, _) => MakePortable();
-        left.Controls.Add(portable);
-
         var right = new FlowLayoutPanel
         {
             Dock = DockStyle.Fill,
@@ -548,52 +522,6 @@ public sealed class MainWindow : Form
         }
     }
 
-    /// <summary>
-    /// Drops a copy of the session next to the exe. From then on the app reads
-    /// and writes that one, so the pair can be zipped up and handed over with
-    /// the players and scores already in it.
-    /// </summary>
-    private void MakePortable()
-    {
-        try
-        {
-            var folder = Path.GetDirectoryName(Environment.ProcessPath);
-            if (folder is null) return;
-
-            var target = Path.Combine(folder, "session.json");
-
-            // Flush whatever the debounce is still holding, so the copy is
-            // this session rather than the last one saved.
-            _save.Stop();
-            SessionStore.Save(_session);
-
-            if (!string.Equals(target, SessionStore.Path, StringComparison.OrdinalIgnoreCase))
-            {
-                File.Copy(SessionStore.Path, target, overwrite: true);
-            }
-
-            MessageBox.Show(this,
-                string.Join(Environment.NewLine,
-                    "Saved to:",
-                    target,
-                    string.Empty,
-                    "Send that file alongside the app and it opens with these players",
-                    "and scores. The app picks it up next time it starts."),
-                "Copy beside the app", MessageBoxButtons.OK, MessageBoxIcon.Information);
-        }
-        catch (Exception error)
-        {
-            MessageBox.Show(this,
-                string.Join(Environment.NewLine,
-                    "Could not write next to the app.",
-                    error.Message,
-                    string.Empty,
-                    "That usually means it is somewhere Windows protects, such as",
-                    "Program Files. Copy the app to an ordinary folder and try again."),
-                "Copy beside the app", MessageBoxButtons.OK, MessageBoxIcon.Warning);
-        }
-    }
-
     /// <summary>The roster, in its own window rather than a tab nobody needs open.</summary>
     private void ShowPlayers()
     {
@@ -645,10 +573,6 @@ public sealed class MainWindow : Form
         _raceAway.Visible = split;
         if (split) _raceAway.Value = session.TargetFor(Side.Away);
         _raceAwayLabel.Text = "Away races to";
-
-        _storeLabel.Text = SessionStore.IsPortable
-            ? "Stored beside the app, so it travels with it."
-            : "Stored for this Windows account only.";
 
         SyncLineup(session);
     }
