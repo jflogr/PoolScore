@@ -10,7 +10,7 @@
 # whenever the app's code has changed, otherwise browsers that already installed
 # the app keep serving the copy they cached.
 #
-# -App also builds windows-app\publish\PoolScoreTracker.exe, the standalone
+# -App also builds windows-app\publish\PoolScore.exe, the standalone
 # Windows app. That app is native C# and draws its own scoreboard, so the web
 # files below are nothing to do with it - rebuild it when anything under
 # windows-app\ changes, and ignore the cache name entirely.
@@ -179,7 +179,7 @@ if ($App) {
   & dotnet publish $project -c Release -o $publish -v quiet --nologo
   if ($LASTEXITCODE -ne 0) { "FAILED - dotnet publish returned $LASTEXITCODE"; exit 1 }
 
-  $exe = Join-Path $publish 'PoolScoreTracker.exe'
+  $exe = Join-Path $publish 'PoolScore.exe'
   if (-not (Test-Path $exe)) { "FAILED - no exe was produced"; exit 1 }
 
   # bin/obj are ~120 MB of rebuildable output and this folder syncs to OneDrive,
@@ -189,5 +189,5 @@ if ($App) {
     if (Test-Path $path) { Remove-Item $path -Recurse -Force -ErrorAction SilentlyContinue }
   }
 
-  "PoolScoreTracker.exe - $((Get-Item $exe).Length) bytes, single self-contained file"
+  "PoolScore.exe - $((Get-Item $exe).Length) bytes, single self-contained file"
 }

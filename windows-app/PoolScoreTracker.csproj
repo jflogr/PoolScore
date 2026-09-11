@@ -6,7 +6,7 @@
     <UseWindowsForms>true</UseWindowsForms>
     <Nullable>enable</Nullable>
     <ImplicitUsings>enable</ImplicitUsings>
-    <AssemblyName>PoolScoreTracker</AssemblyName>
+    <AssemblyName>PoolScore</AssemblyName>
     <RootNamespace>PoolScoreTracker</RootNamespace>
     <ApplicationIcon>app.ico</ApplicationIcon>
 

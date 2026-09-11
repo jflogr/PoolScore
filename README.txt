@@ -61,7 +61,7 @@ Ordered by wins, and deliberately just two numbers per player:
 -------------------------------------------------------------------
 TWO WAYS TO RUN IT
 -------------------------------------------------------------------
-1. WINDOWS APP - windows-app\publish\PoolScoreTracker.exe
+1. WINDOWS APP - windows-app\publish\PoolScore.exe
    One file. Nothing to install: no Node.js, and no WebView2 either - the app
    draws its own scoreboard. Copy it anywhere and double-click.
 
@@ -155,7 +155,7 @@ STREAMING
 WINDOWS APP
 - Click "Banner". A separate fixed-size window opens with nothing in it
   but the score line. In OBS add a Window Capture and pick
-  "[PoolScoreTracker.exe]: Pool Score Banner". No cropping needed - the window
+  "[PoolScore.exe]: Pool Score Banner". No cropping needed - the window
   is exactly the size it captures at.
 - Any capture method works, including BitBlt, and it keeps working while the
   window is behind others. The banner is drawn by the app itself rather than by
@@ -175,7 +175,7 @@ REBUILDING (for whoever maintains this)
   powershell -ExecutionPolicy Bypass -File build.ps1 -BumpCache -App
 
 Packages pool-score-tracker.zip and verifies it, bumps the service worker cache
-name so installed browser copies refresh, and builds PoolScoreTracker.exe.
+name so installed browser copies refresh, and builds PoolScore.exe.
 
 The two are independent now: the Windows app is native C# under windows-app\
 and no longer embeds the web files, so a change to index.html / app.js / the
