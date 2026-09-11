@@ -1,0 +1,1088 @@
+:root {
+  color-scheme: light;
+  --ink: #1a2130;
+  --muted: #64748b;
+  --line: #d9dfe8;
+  --paper: #f4f6f9;
+  --panel: #ffffff;
+  --slate: #4a5f7a;
+  --slate-dark: #3b4a5c;
+  --scorebar: #2b3846;
+  --gold: #c89125;
+  --blue: #235e9e;
+  --red: #b33d33;
+  --shadow: 0 14px 34px rgba(15, 23, 42, 0.1);
+  font-family: Inter, "Segoe UI", Roboto, Arial, sans-serif;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+[hidden] {
+  display: none !important;
+}
+
+body {
+  min-height: 100vh;
+  margin: 0;
+  background:
+    linear-gradient(180deg, rgba(74, 95, 122, 0.1), transparent 230px),
+    var(--paper);
+  color: var(--ink);
+}
+
+button,
+input {
+  font: inherit;
+}
+
+button {
+  cursor: pointer;
+}
+
+h1,
+h2,
+p {
+  margin: 0;
+}
+
+.app-shell {
+  min-height: 100vh;
+}
+
+.sticky-header {
+  position: sticky;
+  top: 0;
+  z-index: 40;
+  background: rgba(244, 246, 249, 0.96);
+  border-bottom: 1px solid var(--line);
+  box-shadow: 0 8px 22px rgba(15, 23, 42, 0.08);
+}
+
+.topbar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  padding: 14px clamp(14px, 3vw, 30px);
+  backdrop-filter: blur(14px);
+}
+
+.brand-lockup {
+  min-width: 0;
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.app-icon {
+  width: 42px;
+  height: 42px;
+  flex: 0 0 auto;
+}
+
+h1 {
+  font-size: clamp(1.15rem, 2vw, 1.55rem);
+  line-height: 1.1;
+}
+
+.brand-lockup p,
+.section-head p,
+.team-label {
+  color: var(--muted);
+}
+
+.top-actions,
+.match-actions {
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.workspace {
+  width: min(1500px, 100%);
+  margin: 0 auto;
+  padding: clamp(14px, 2.4vw, 28px);
+  display: grid;
+  /* The leaderboard is a name and two small numbers, so it only takes a slim
+     column - the rest goes to the scoring rows. */
+  grid-template-columns: minmax(360px, 1fr) minmax(210px, 270px);
+  gap: 16px;
+}
+
+.scorebar {
+  background: var(--scorebar);
+}
+
+.match-panel,
+.standings-panel,
+.setup-panel,
+.install-panel,
+.share-panel,
+.schedule-panel {
+  min-width: 0;
+  background: var(--panel);
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  box-shadow: var(--shadow);
+}
+
+.match-panel,
+.standings-panel,
+.setup-panel,
+.install-panel,
+.share-panel {
+  padding: 16px;
+}
+
+.schedule-panel {
+  grid-column: 1 / -1;
+  padding: 16px;
+}
+
+.setup-panel,
+.install-panel,
+.share-panel {
+  grid-column: 1 / -1;
+}
+
+/* The install offer only shows while the browser will actually take it. */
+.install-panel .section-head {
+  margin-bottom: 0;
+}
+
+.install-panel .primary-button {
+  flex: 0 0 auto;
+  padding: 0 20px;
+}
+
+body[data-kind="match"] .standings-panel,
+body[data-kind="match"] .schedule-panel {
+  display: none;
+}
+
+/* Guests (joined over the wifi via the QR) get a score-only view. */
+.view-guest .setup-panel,
+.view-guest .install-panel,
+.view-guest .share-panel,
+.view-guest #resetAllButton {
+  display: none;
+}
+
+/* The Windows app has no server behind it, so there is nothing to install or
+   share - everything else is identical. */
+.view-app .install-panel,
+.view-app .share-panel {
+  display: none;
+}
+
+body[data-mode="doubles4"] .sit-col {
+  display: none;
+}
+
+
+.section-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  margin-bottom: 12px;
+}
+
+.section-head h2 {
+  font-size: 1rem;
+}
+
+.section-head > div {
+  min-width: 0;
+}
+
+/* A slim column cannot take a long list of joint leaders on four lines. */
+#leaderLabel {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.section-head span,
+#progressBadge,
+#activeSetBadge {
+  flex: 0 0 auto;
+  border-radius: 999px;
+  padding: 5px 10px;
+  background: #eef2f8;
+  color: var(--slate-dark);
+  font-size: 0.78rem;
+  font-weight: 900;
+}
+
+.stream-capture {
+  width: 100%;
+  min-height: 58px;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto auto auto minmax(0, 1fr);
+  align-items: center;
+  gap: 18px;
+  padding: 10px clamp(14px, 3vw, 30px);
+  overflow: hidden;
+  border-radius: 0;
+  background: var(--scorebar);
+  color: #fff;
+  box-shadow: none;
+  white-space: nowrap;
+}
+
+.stream-capture > span {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  font-size: clamp(1.5rem, 3vw, 2.4rem);
+  font-weight: 900;
+}
+
+/* Each side is name + break dot; the name truncates, the dot never does. */
+.stream-side {
+  display: flex;
+  align-items: center;
+  gap: 0.28em;
+}
+
+.stream-name {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+/* Each side fills its grid track (justify-self would size it to its content and
+   overflow instead) and packs its contents towards the score in the middle. */
+#streamHome {
+  justify-self: stretch;
+  justify-content: flex-end;
+  text-align: right;
+}
+
+#streamAway {
+  justify-self: stretch;
+  justify-content: flex-start;
+  text-align: left;
+}
+
+.stream-capture .break-dot {
+  flex: 0 0 auto;
+  color: var(--gold);
+  font-size: 0.62em;
+  line-height: 1;
+}
+
+.stream-capture strong {
+  min-width: 42px;
+  flex: 0 0 auto;
+  display: inline-grid;
+  place-items: center;
+  border-radius: 7px;
+  padding: 4px 8px;
+  background: #fff;
+  color: var(--slate-dark);
+  font-size: clamp(1.6rem, 3vw, 2.4rem);
+  line-height: 1;
+}
+
+.stream-capture .race-number {
+  min-width: auto;
+  flex: 0 0 auto;
+  justify-self: center;
+  color: #dae3ee;
+  font-size: clamp(0.9rem, 1.45vw, 1.12rem);
+  letter-spacing: 0;
+  font-weight: 900;
+}
+
+/* --------------------------- progress strip ---------------------------- */
+
+/* A thin companion bar under the OBS line: where we are in the session, with a
+   marker per set grouped into rounds. */
+.progress-strip {
+  min-height: 22px;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 3px clamp(14px, 3vw, 30px);
+  background: var(--slate-dark);
+  color: #dae3ee;
+  font-size: 0.68rem;
+  font-weight: 900;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+}
+
+.strip-label {
+  flex: 0 0 auto;
+  white-space: nowrap;
+}
+
+.strip-track {
+  flex: 1 1 60px;
+  min-width: 40px;
+  display: flex;
+  align-items: center;
+  gap: 10px; /* the gaps are the round breaks */
+}
+
+.strip-round {
+  flex: 1 1 auto;
+  display: flex;
+  align-items: center;
+  gap: 3px;
+}
+
+.strip-seg {
+  flex: 1 1 auto;
+  height: 7px;
+  border-radius: 2px;
+  background: rgba(255, 255, 255, 0.16);
+}
+
+.strip-seg.done {
+  background: var(--gold);
+}
+
+.strip-seg.current {
+  height: 13px;
+  background: #fff;
+}
+
+/* One-off matches have no sets to track. */
+body[data-kind="match"] .strip-track {
+  display: none;
+}
+
+/* ------------------------------- scoring ------------------------------- */
+
+/* Deliberately stacked, not 2-up: two rows side by side inside this column
+   would leave each stepper about 205px, dropping the +/- buttons from 115px to
+   ~57px. Stacked, the buttons stay the biggest thing on the panel. */
+.score-controls {
+  display: grid;
+  gap: 10px;
+}
+
+/* One row per side: a compact name block, then a big stepper that keeps its
+   size at any width (the name gives way, never the buttons). */
+.team-row {
+  display: grid;
+  /* The name keeps a floor so it never shreds into one word per line, and the
+     stepper takes everything else up to a comfortable maximum. */
+  grid-template-columns: minmax(112px, 1fr) minmax(200px, 320px);
+  align-items: center;
+  gap: 12px;
+  padding: 10px 12px;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: #fbfcfe;
+}
+
+/* The side breaking the rack about to be played. */
+.team-row.breaking {
+  border-color: var(--slate);
+  box-shadow: inset 0 0 0 1px var(--slate);
+}
+
+/* Matches the stepper's height so both rows stay the same size. The dot column
+   is a fixed width, so the names line up whether or not the dot is showing. */
+.team-info {
+  min-width: 0;
+  min-height: 78px;
+  display: grid;
+  grid-template-columns: 13px minmax(0, 1fr);
+  align-items: center;
+  gap: 11px;
+}
+
+/* Both are placed explicitly: when the dot is hidden it stops being a grid item,
+   and auto-placement would drop the names into the dot's column. */
+.team-text {
+  grid-column: 2;
+  min-width: 0;
+  display: grid;
+  gap: 2px;
+}
+
+/* The side breaking the rack about to be played. */
+.break-mark {
+  grid-column: 1;
+  width: 13px;
+  height: 13px;
+  border-radius: 50%;
+  background: var(--gold);
+}
+
+/* One player per line - two lines of names is all this block carries, so the
+   type can run big. */
+.team-row strong {
+  display: grid;
+  gap: 1px;
+  overflow-wrap: anywhere;
+  font-size: clamp(1.35rem, 2.6vw, 2rem);
+  line-height: 1.15;
+}
+
+/* Team names run long, so they get a size that still fits on one line. */
+body[data-name-style="full"] .team-row strong {
+  font-size: clamp(1.05rem, 1.7vw, 1.4rem);
+}
+
+.team-label {
+  font-size: 0.72rem;
+  font-weight: 900;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+}
+
+/* Break marker in the schedule table. */
+.team-cell .break-dot {
+  margin-right: 5px;
+  color: var(--gold);
+  font-size: 0.72em;
+  vertical-align: 0.12em;
+}
+
+.score-stepper {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(52px, 74px) minmax(0, 1fr);
+  align-items: center;
+  gap: 8px;
+}
+
+.big-score {
+  width: 100%;
+  min-height: 78px;
+  display: grid;
+  place-items: center;
+  border-radius: 8px;
+  background: #fff;
+  border: 1px solid var(--line);
+  color: var(--ink);
+  font-size: clamp(2.4rem, 5vw, 3.4rem);
+  line-height: 1;
+  font-weight: 900;
+}
+
+.match-actions {
+  margin-top: 14px;
+}
+
+.primary-button,
+.ghost-button,
+.danger-button,
+.step-button {
+  min-height: 42px;
+  border: 1px solid transparent;
+  border-radius: 7px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  font-weight: 900;
+}
+
+.primary-button {
+  flex: 1 1 220px;
+  background: var(--slate-dark);
+  color: #fff;
+}
+
+.primary-button:disabled,
+.ghost-button:disabled {
+  cursor: not-allowed;
+  opacity: 0.55;
+}
+
+.ghost-button {
+  background: #fff;
+  color: var(--ink);
+  border-color: var(--line);
+}
+
+.danger-button {
+  background: #fff;
+  color: var(--red);
+  border-color: #e7bbb7;
+}
+
+.step-button {
+  width: 100%;
+  min-height: 78px;
+  background: #fff;
+  color: var(--ink);
+  border-color: var(--line);
+  font-size: clamp(1.9rem, 4vw, 2.8rem);
+}
+
+.step-button.dark {
+  background: var(--ink);
+  color: #fff;
+}
+
+button:focus-visible,
+input:focus {
+  outline: 3px solid rgba(35, 94, 158, 0.22);
+  outline-offset: 2px;
+}
+
+.player-grid {
+  display: grid;
+  grid-template-columns: minmax(220px, 360px);
+  gap: 10px;
+}
+
+.setup-grid {
+  display: grid;
+  grid-template-columns: minmax(92px, 120px) minmax(220px, 360px);
+  gap: 18px;
+  align-items: start;
+}
+
+.race-field input {
+  text-align: center;
+}
+
+.player-field {
+  display: grid;
+  gap: 6px;
+}
+
+.player-field span {
+  color: var(--muted);
+  font-size: 0.76rem;
+  font-weight: 900;
+}
+
+.player-field input {
+  width: 100%;
+  min-height: 38px;
+  border: 1px solid var(--line);
+  border-radius: 7px;
+  padding: 0 10px;
+  background: #fff;
+  color: var(--ink);
+  font-weight: 800;
+}
+
+.table-wrap {
+  overflow-x: auto;
+}
+
+table {
+  width: 100%;
+  border-collapse: collapse;
+}
+
+th,
+td {
+  padding: 10px 10px;
+  border-bottom: 1px solid var(--line);
+  text-align: left;
+  vertical-align: middle;
+}
+
+th {
+  color: #56637a;
+  font-size: 0.76rem;
+  text-transform: uppercase;
+}
+
+td:not(:first-child),
+th:not(:first-child) {
+  text-align: center;
+}
+
+tbody tr:last-child td {
+  border-bottom: 0;
+}
+
+.standings-table td:first-child,
+.schedule-table td:nth-child(3),
+.schedule-table td:nth-child(5) {
+  font-weight: 800;
+}
+
+/* Won out of played, then the best they can still finish on, kept quiet. */
+.wins-cell {
+  font-weight: 900;
+  font-size: 1.05rem;
+}
+
+.muted-col {
+  color: var(--muted);
+  font-weight: 700;
+}
+
+/* A slim column: trim the padding and let the header abbreviate. */
+.standings-table th,
+.standings-table td {
+  padding: 9px 4px;
+}
+
+.standings-table th:first-child,
+.standings-table td:first-child {
+  padding-left: 0;
+}
+
+.standings-table th:last-child,
+.standings-table td:last-child {
+  padding-right: 0;
+}
+
+.schedule-table {
+  min-width: 860px;
+}
+
+.schedule-row {
+  transition: background 0.16s ease;
+}
+
+.schedule-row.active {
+  background: #e9eef6;
+  box-shadow: inset 4px 0 0 var(--slate);
+}
+
+.schedule-row.done {
+  color: #64748b;
+  background: #fafbfd;
+}
+
+.score-cell {
+  font-weight: 900;
+  color: var(--slate-dark);
+}
+
+.status-pill {
+  display: inline-flex;
+  min-width: 74px;
+  justify-content: center;
+  border-radius: 999px;
+  padding: 4px 9px;
+  background: #eef1f6;
+  color: #5a6779;
+  font-size: 0.76rem;
+  font-weight: 900;
+}
+
+.status-pill.active {
+  background: #e3e9f3;
+  color: var(--slate-dark);
+}
+
+.status-pill.done {
+  background: #fff2d9;
+  color: #80550e;
+}
+
+/* Keep Player Wins alongside the scoring panel for as long as it fits. */
+@media (max-width: 940px) {
+  .workspace {
+    grid-template-columns: 1fr;
+  }
+}
+
+@media (max-width: 720px) {
+  .topbar {
+    align-items: center;
+    flex-wrap: nowrap;
+  }
+
+  .setup-grid,
+  .player-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .stream-capture {
+    grid-template-columns: minmax(0, 1fr) auto auto auto minmax(0, 1fr);
+    gap: 10px;
+  }
+
+  .stream-capture > span {
+    font-size: clamp(1rem, 3.4vw, 1.45rem);
+  }
+
+  .stream-capture strong {
+    min-width: 34px;
+    font-size: clamp(1.45rem, 4vw, 2rem);
+  }
+
+  .button-copy {
+    display: none;
+  }
+}
+
+/* Phones: the name sits above a full-width stepper so the buttons stay big. */
+@media (max-width: 560px) {
+  .team-row {
+    grid-template-columns: 1fr;
+    gap: 10px;
+  }
+
+  /* Stacked here, so the name block no longer has to match the stepper. */
+  .team-info {
+    min-height: 0;
+  }
+
+  .score-stepper {
+    grid-template-columns: minmax(64px, 1fr) minmax(56px, 88px) minmax(64px, 1fr);
+  }
+
+  .big-score,
+  .step-button {
+    min-height: 86px;
+  }
+
+  .strip-label {
+    font-size: 0.62rem;
+  }
+}
+
+@media (max-width: 440px) {
+  .workspace {
+    padding-left: 10px;
+    padding-right: 10px;
+  }
+
+  .match-panel,
+  .standings-panel,
+  .setup-panel,
+  .install-panel,
+  .share-panel,
+  .schedule-panel {
+    padding: 12px;
+  }
+
+  .stream-capture {
+    padding: 10px;
+  }
+
+  .section-head {
+    align-items: flex-start;
+    flex-direction: column;
+  }
+}
+
+/* ----------------------------- match result ---------------------------- */
+
+.match-result {
+  margin-top: 12px;
+  padding: 10px 12px;
+  border-radius: 8px;
+  background: #fff2d9;
+  color: #80550e;
+  font-weight: 900;
+  text-align: center;
+  font-size: 1.05rem;
+}
+
+.live-pill {
+  align-self: center;
+  border-radius: 999px;
+  padding: 5px 12px;
+  background: var(--blue);
+  color: #fff;
+  font-size: 0.74rem;
+  font-weight: 900;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+}
+
+/* ------------------------------- setup --------------------------------- */
+
+.setup-block {
+  margin-bottom: 18px;
+}
+
+.setup-block:last-child {
+  margin-bottom: 0;
+}
+
+.setup-label {
+  display: block;
+  margin-bottom: 8px;
+  color: var(--muted);
+  font-size: 0.76rem;
+  font-weight: 900;
+  text-transform: uppercase;
+  letter-spacing: 0.03em;
+}
+
+.setup-hint,
+.share-hint {
+  margin-top: 8px;
+  color: var(--muted);
+  font-size: 0.85rem;
+  line-height: 1.4;
+}
+
+.mode-switch {
+  display: inline-flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  padding: 4px;
+  background: #eef1f6;
+  border-radius: 10px;
+}
+
+.mode-button {
+  min-height: 40px;
+  padding: 0 16px;
+  border: 1px solid transparent;
+  border-radius: 8px;
+  background: transparent;
+  color: var(--muted);
+  font-weight: 900;
+}
+
+.mode-button.active {
+  background: var(--slate-dark);
+  color: #fff;
+}
+
+.lineup-pickers {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(160px, 1fr));
+  gap: 10px;
+  max-width: 760px;
+}
+
+.player-field select {
+  width: 100%;
+  min-height: 40px;
+  border: 1px solid var(--line);
+  border-radius: 7px;
+  padding: 0 10px;
+  background: #fff;
+  color: var(--ink);
+  font-weight: 800;
+}
+
+.race-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 18px;
+  align-items: start;
+}
+
+.race-field {
+  width: 140px;
+}
+
+.singles-handicaps {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 14px;
+}
+
+/* --------------------------- roster manager ---------------------------- */
+
+.roster {
+  display: grid;
+  gap: 8px;
+  max-width: 480px;
+}
+
+.roster-row {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+}
+
+.roster-row input {
+  flex: 1 1 auto;
+  min-height: 38px;
+  border: 1px solid var(--line);
+  border-radius: 7px;
+  padding: 0 10px;
+  background: #fff;
+  color: var(--ink);
+  font-weight: 800;
+}
+
+.roster-remove {
+  flex: 0 0 auto;
+  min-height: 38px;
+  padding: 0 12px;
+  border: 1px solid #e7bbb7;
+  border-radius: 7px;
+  background: #fff;
+  color: var(--red);
+  font-weight: 800;
+  font-size: 0.85rem;
+}
+
+.roster-add {
+  display: flex;
+  gap: 8px;
+  margin-top: 10px;
+  max-width: 480px;
+}
+
+.roster-add input {
+  flex: 1 1 auto;
+  min-height: 40px;
+  border: 1px solid var(--line);
+  border-radius: 7px;
+  padding: 0 10px;
+  background: #fff;
+  color: var(--ink);
+  font-weight: 700;
+}
+
+.roster-add .ghost-button {
+  flex: 0 0 auto;
+  padding: 0 18px;
+}
+
+/* ------------------------------- share --------------------------------- */
+
+.share-list {
+  display: grid;
+  gap: 10px;
+}
+
+.share-subhead {
+  margin: 4px 0 0;
+  color: var(--muted);
+  font-size: 0.8rem;
+  font-weight: 900;
+  text-transform: uppercase;
+  letter-spacing: 0.03em;
+}
+
+.share-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  align-items: center;
+}
+
+.share-tag {
+  flex: 0 0 auto;
+  color: var(--muted);
+  font-size: 0.85rem;
+  font-weight: 800;
+}
+
+.share-row code {
+  flex: 1 1 220px;
+  min-width: 0;
+  overflow-x: auto;
+  padding: 8px 12px;
+  border-radius: 7px;
+  background: var(--scorebar);
+  color: #dde5ef;
+  font-family: "SFMono-Regular", Consolas, "Liberation Mono", monospace;
+  font-size: 0.92rem;
+  white-space: nowrap;
+}
+
+.share-copy {
+  flex: 0 0 auto;
+  min-height: 38px;
+  padding: 0 14px;
+}
+
+.share-qr .share-subhead {
+  margin-bottom: 8px;
+}
+
+.share-qr-box {
+  display: inline-block;
+  padding: 10px;
+  background: #fff;
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  line-height: 0;
+}
+
+.share-qr-box svg {
+  width: 168px;
+  height: 168px;
+  display: block;
+}
+
+/* --------------------------- spectator board --------------------------- */
+
+.view-board .topbar,
+.view-board .progress-strip,
+.view-board .workspace {
+  display: none;
+}
+
+.view-board {
+  background: #0e141c;
+}
+
+.view-board .sticky-header {
+  position: static;
+  background: transparent;
+  border: 0;
+  box-shadow: none;
+}
+
+.view-board .scorebar {
+  min-height: 100vh;
+  display: grid;
+  place-items: center;
+  background: #0e141c;
+  overflow: hidden;
+}
+
+/* One scalable row. Everything is sized in em off the line's font-size, which
+   fitBoard() sets in JS so the whole scoreboard fits the screen. */
+.view-board .stream-capture {
+  width: auto;
+  min-height: 0;
+  display: inline-flex;
+  flex-wrap: nowrap;
+  align-items: center;
+  justify-content: center;
+  gap: 0.3em;
+  padding: 0 0.2em;
+  background: transparent;
+  white-space: nowrap;
+  overflow: visible;
+  font-size: 7vh; /* fallback before fitBoard() runs */
+}
+
+.view-board .stream-capture > span {
+  min-width: 0;
+  overflow: visible;
+  text-overflow: clip;
+  white-space: nowrap;
+  font-size: 0.82em;
+}
+
+/* Nothing truncates on the board - fitBoard() measures the natural width and
+   scales the whole row down instead. */
+.view-board .stream-side,
+.view-board .stream-name {
+  flex: 0 0 auto;
+  overflow: visible;
+  text-overflow: clip;
+}
+
+.view-board #streamHome,
+.view-board #streamAway {
+  justify-self: auto;
+}
+
+.view-board .stream-capture strong {
+  min-width: 1.4em;
+  margin: 0 0.16em;
+  padding: 0.1em 0.2em;
+  border-radius: 0.14em;
+  font-size: 1.2em;
+}
+
+.view-board .stream-capture .race-number {
+  margin: 0 0.1em;
+  font-size: 0.5em;
+}

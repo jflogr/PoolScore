@@ -1,0 +1,223 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="color-scheme" content="dark">
+<title>Pool Score</title>
+<style>
+  :root {
+    --ink: #2b3846;
+    --deep: #223040;
+    --paper: #ffffff;
+    --muted: #93a3b5;
+    --line: #35465a;
+    --gold: #d9a441;
+  }
+
+  * { box-sizing: border-box; }
+
+  body {
+    margin: 0;
+    background: var(--deep);
+    color: var(--paper);
+    font: 16px/1.4 system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+    padding: env(safe-area-inset-top) env(safe-area-inset-right) env(safe-area-inset-bottom) env(safe-area-inset-left);
+  }
+
+  header { padding: 14px 16px 10px; }
+  h1 { margin: 0; font-size: 0.8rem; font-weight: 600; letter-spacing: 0.06em; text-transform: uppercase; color: var(--muted); }
+
+  /* ---- the score itself, the reason anyone opens this ---- */
+  .score { background: var(--ink); padding: 18px 16px 20px; }
+
+  .side { display: flex; align-items: center; gap: 12px; }
+  .side + .side { margin-top: 14px; }
+
+  .names { flex: 1; min-width: 0; font-size: 1.35rem; font-weight: 700; line-height: 1.15; }
+  .names span { display: block; }
+
+  .tally { font-size: 2.6rem; font-weight: 800; font-variant-numeric: tabular-nums; min-width: 2ch; text-align: right; }
+  .side.lit .tally, .side.lit .names { color: var(--gold); }
+
+  .dot { width: 0.6rem; height: 0.6rem; border-radius: 50%; background: var(--gold); flex: none; }
+  .dot.off { visibility: hidden; }
+
+  /* one box per rack in that side's race, filling as they are won */
+  .bar { display: flex; gap: 3px; margin-top: 6px; }
+  .bar i { flex: 1; height: 8px; border-radius: 2px; background: #3d4c5c; }
+  .bar i.won { background: var(--paper); }
+  .side.lit .bar i.won { background: var(--gold); }
+
+  /* ---- reference below ---- */
+  section { padding: 16px; border-top: 1px solid var(--line); }
+  h2 { margin: 0 0 10px; font-size: 0.72rem; letter-spacing: 0.08em; text-transform: uppercase; color: var(--muted); font-weight: 600; }
+
+  table { width: 100%; border-collapse: collapse; font-size: 0.95rem; }
+  th { text-align: left; font-size: 0.68rem; letter-spacing: 0.06em; text-transform: uppercase; color: var(--muted); font-weight: 600; padding-bottom: 6px; }
+  td { padding: 7px 0; border-top: 1px solid var(--line); vertical-align: top; }
+  td.num { text-align: right; font-variant-numeric: tabular-nums; white-space: nowrap; }
+
+  tr.current td { background: #2f3f52; }
+  tr.played td { color: var(--muted); }
+  .set { color: var(--muted); font-variant-numeric: tabular-nums; padding-right: 10px; }
+  .vs { color: var(--muted); font-size: 0.85rem; }
+  .sitting { color: var(--muted); font-size: 0.82rem; }
+
+  footer { padding: 14px 16px 24px; color: var(--muted); font-size: 0.78rem; }
+  .offline { color: var(--gold); }
+</style>
+</head>
+<body>
+  <header><h1 id="heading">Connecting…</h1></header>
+
+  <div class="score">
+    <div class="side" id="homeSide">
+      <span class="dot off" id="homeDot"></span>
+      <div style="flex:1;min-width:0">
+        <div class="names" id="homeNames"></div>
+        <div class="bar" id="homeBar"></div>
+      </div>
+      <div class="tally" id="homeScore">0</div>
+    </div>
+    <div class="side" id="awaySide">
+      <span class="dot off" id="awayDot"></span>
+      <div style="flex:1;min-width:0">
+        <div class="names" id="awayNames"></div>
+        <div class="bar" id="awayBar"></div>
+      </div>
+      <div class="tally" id="awayScore">0</div>
+    </div>
+  </div>
+
+  <section id="leaderSection" hidden>
+    <h2>Leaderboard</h2>
+    <table>
+      <thead><tr><th>Player</th><th class="num">Wins</th><th class="num">Possible</th></tr></thead>
+      <tbody id="leaders"></tbody>
+    </table>
+  </section>
+
+  <section id="upcomingSection" hidden>
+    <h2>Matches</h2>
+    <table><tbody id="upcoming"></tbody></table>
+  </section>
+
+  <footer id="status">Watching live.</footer>
+
+<script>
+  "use strict";
+
+  const $ = (id) => document.getElementById(id);
+
+  function names(into, list) {
+    into.textContent = "";
+    for (const name of list) {
+      const line = document.createElement("span");
+      line.textContent = name;
+      into.append(line);
+    }
+  }
+
+  // One box per rack in the race. With a handicap the two sides have different
+  // counts, so what you compare is how full each bar is, not how many boxes.
+  function bar(into, score, target) {
+    into.textContent = "";
+    for (let i = 0; i < target; i += 1) {
+      const box = document.createElement("i");
+      if (i < score) box.className = "won";
+      into.append(box);
+    }
+  }
+
+  function side(prefix, list, score, target, breaking) {
+    const won = score >= target;
+    const onHill = !won && score === target - 1;
+
+    names($(prefix + "Names"), list);
+    $(prefix + "Score").textContent = score;
+    bar($(prefix + "Bar"), score, target);
+    $(prefix + "Dot").classList.toggle("off", !breaking);
+    $(prefix + "Side").classList.toggle("lit", onHill || won);
+  }
+
+  function render(state) {
+    $("heading").textContent = state.heading;
+
+    const s = state.score;
+    side("home", s.home, s.homeScore, s.homeTarget, s.breaking === "home");
+    side("away", s.away, s.awayScore, s.awayTarget, s.breaking === "away");
+
+    const leaders = $("leaders");
+    leaders.textContent = "";
+    for (const row of state.leaders) {
+      const tr = document.createElement("tr");
+      tr.innerHTML = "<td></td><td class='num'></td><td class='num'></td>";
+      tr.children[0].textContent = row.name;
+      tr.children[1].textContent = row.wins + "/" + row.played;
+      tr.children[2].textContent = row.possible;
+      leaders.append(tr);
+    }
+    $("leaderSection").hidden = state.leaders.length === 0;
+
+    const upcoming = $("upcoming");
+    upcoming.textContent = "";
+    for (const match of state.upcoming) {
+      const tr = document.createElement("tr");
+      tr.className = match.status;
+
+      const set = document.createElement("td");
+      set.className = "set";
+      set.textContent = match.set;
+
+      const who = document.createElement("td");
+      const home = document.createElement("div");
+      home.textContent = (match.breaksFirst === "home" ? "• " : "") + match.home;
+      const vs = document.createElement("div");
+      vs.className = "vs";
+      vs.textContent = "v";
+      const away = document.createElement("div");
+      away.textContent = (match.breaksFirst === "away" ? "• " : "") + match.away;
+      who.append(home, vs, away);
+
+      if (match.sitting) {
+        const sitting = document.createElement("div");
+        sitting.className = "sitting";
+        sitting.textContent = "sitting: " + match.sitting;
+        who.append(sitting);
+      }
+
+      const result = document.createElement("td");
+      result.className = "num";
+      result.textContent = match.score || (match.status === "current" ? "now" : "");
+
+      tr.append(set, who, result);
+      upcoming.append(tr);
+    }
+    $("upcomingSection").hidden = state.upcoming.length === 0;
+  }
+
+  function watch() {
+    const source = new EventSource("api/events");
+
+    source.addEventListener("state", (event) => {
+      $("status").textContent = "Watching live.";
+      $("status").classList.remove("offline");
+      render(JSON.parse(event.data));
+    });
+
+    // EventSource reconnects on its own; just say so while it is down.
+    source.addEventListener("error", () => {
+      $("status").textContent = "Lost the scorer — reconnecting…";
+      $("status").classList.add("offline");
+    });
+  }
+
+  fetch("api/state", { cache: "no-store" })
+    .then((response) => response.json())
+    .then(render)
+    .catch(() => {})
+    .finally(watch);
+</script>
+</body>
+</html>

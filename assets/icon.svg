@@ -1,0 +1,14 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 256 256" role="img" aria-label="Pool Score Tracker">
+  <rect width="256" height="256" rx="42" fill="#2b3846"/>
+  <rect x="34" y="56" width="188" height="132" rx="26" fill="#3b4a5c"/>
+  <rect x="45" y="67" width="166" height="110" rx="18" fill="#4a5f7a"/>
+  <circle cx="54" cy="66" r="18" fill="#161c26"/>
+  <circle cx="202" cy="66" r="18" fill="#161c26"/>
+  <circle cx="54" cy="178" r="18" fill="#161c26"/>
+  <circle cx="202" cy="178" r="18" fill="#161c26"/>
+  <circle cx="99" cy="121" r="24" fill="#f1f3f7"/>
+  <circle cx="157" cy="121" r="24" fill="#131820"/>
+  <text x="99" y="130" font-family="Arial, sans-serif" font-size="24" font-weight="800" text-anchor="middle" fill="#131820">1</text>
+  <text x="157" y="130" font-family="Arial, sans-serif" font-size="24" font-weight="800" text-anchor="middle" fill="#f1f3f7">8</text>
+  <rect x="68" y="207" width="120" height="16" rx="8" fill="#f1f3f7"/>
+</svg>

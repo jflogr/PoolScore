@@ -1,0 +1,10 @@
+# The working tree is LF throughout. Without this, git on Windows would hand
+# back CRLF on the next checkout and rewrite every source file.
+* text=auto eol=lf
+
+# Batch files are the exception - keep them CRLF for cmd.exe.
+*.cmd text eol=crlf
+
+*.png binary
+*.ico binary
+*.zip binary

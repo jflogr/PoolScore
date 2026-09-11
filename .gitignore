@@ -1,0 +1,20 @@
+# Build output. build.ps1 -App regenerates the exe (about 60 MB), so it is not
+# worth carrying in history; the zip is packaged from the tracked web files.
+windows-app/publish/
+windows-app/bin/
+windows-app/obj/
+pool-score-tracker.zip
+
+# Runtime state written by the little Node server while it is running.
+session.json
+
+# Local Claude Code settings; launch.json is shared, this one is per machine.
+.claude/settings.local.json
+
+# Windows / OneDrive litter
+Thumbs.db
+desktop.ini
+*~
+
+# Dated archive zips are snapshots, superseded by history.
+*.zip

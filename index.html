@@ -1,0 +1,244 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <meta name="theme-color" content="#2b3846">
+    <title>Pool Score Tracker</title>
+    <link rel="manifest" href="manifest.webmanifest">
+    <link rel="icon" href="assets/icon.svg" type="image/svg+xml">
+    <link rel="stylesheet" href="styles.css">
+  </head>
+  <body>
+    <div class="app-shell">
+      <div class="sticky-header">
+        <header class="topbar">
+          <div class="brand-lockup">
+            <img src="assets/icon.svg" alt="" class="app-icon">
+            <div>
+              <h1 id="appTitle">Pool Tracker</h1>
+              <p id="sessionMeta">Race to 3</p>
+            </div>
+          </div>
+          <div class="top-actions">
+            <span class="live-pill" id="livePill" title="Live sharing status" hidden>Live</span>
+            <button type="button" class="danger-button" id="resetAllButton" title="Reset scores">
+              <span aria-hidden="true">X</span>
+              <span class="button-copy">Reset</span>
+            </button>
+          </div>
+        </header>
+
+        <div class="scorebar" id="scorebar">
+          <div class="stream-capture" id="streamLine" aria-label="Stream capture line">
+            <span class="stream-side" id="streamHome">
+              <span class="stream-name" id="streamHomeName">Player 1 / Player 2</span>
+              <span class="break-dot" id="streamHomeBreak" title="Breaks first" hidden>&#9679;</span>
+            </span>
+            <strong id="streamHomeScore">0</strong>
+            <span class="race-number" id="streamRaceNumber">(3)</span>
+            <strong id="streamAwayScore">0</strong>
+            <span class="stream-side" id="streamAway">
+              <span class="break-dot" id="streamAwayBreak" title="Breaks first" hidden>&#9679;</span>
+              <span class="stream-name" id="streamAwayName">Player 3 / Player 4</span>
+            </span>
+          </div>
+        </div>
+
+        <div class="progress-strip" id="progressStrip" aria-label="Session progress">
+          <span class="strip-label" id="stripMeta">Set 1 - Round 1</span>
+          <div class="strip-track" id="stripTrack"></div>
+          <span class="strip-label" id="stripSitting">Sitting: Player 5</span>
+        </div>
+      </div>
+
+      <main class="workspace">
+        <section class="match-panel" aria-label="Current match">
+          <div class="score-controls">
+            <div class="team-row home-team" id="homeTeamCard">
+              <div class="team-info">
+                <span class="break-mark" id="homeBreakBadge" title="Breaks this rack" aria-label="Breaks this rack" hidden></span>
+                <div class="team-text">
+                  <span class="team-label" id="homeLabel" hidden></span>
+                  <strong id="homeTeamName"></strong>
+                </div>
+              </div>
+              <div class="score-stepper">
+                <button type="button" class="step-button" data-team="home" data-delta="-1" title="Home score down">-</button>
+                <span class="big-score" id="homeScore">0</span>
+                <button type="button" class="step-button dark" data-team="home" data-delta="1" title="Home score up">+</button>
+              </div>
+            </div>
+
+            <div class="team-row away-team" id="awayTeamCard">
+              <div class="team-info">
+                <span class="break-mark" id="awayBreakBadge" title="Breaks this rack" aria-label="Breaks this rack" hidden></span>
+                <div class="team-text">
+                  <span class="team-label" id="awayLabel" hidden></span>
+                  <strong id="awayTeamName"></strong>
+                </div>
+              </div>
+              <div class="score-stepper">
+                <button type="button" class="step-button" data-team="away" data-delta="-1" title="Away score down">-</button>
+                <span class="big-score" id="awayScore">0</span>
+                <button type="button" class="step-button dark" data-team="away" data-delta="1" title="Away score up">+</button>
+              </div>
+            </div>
+          </div>
+
+          <p class="match-result" id="matchResult" hidden></p>
+
+          <div class="match-actions">
+            <button type="button" class="primary-button" id="commitButton">Commit score</button>
+            <button type="button" class="primary-button" id="newMatchButton" hidden>New match</button>
+            <button type="button" class="ghost-button" id="swapBreakButton" title="Swap which side breaks">Swap break</button>
+            <button type="button" class="ghost-button" id="undoButton">Undo last</button>
+          </div>
+        </section>
+
+        <section class="standings-panel" aria-label="Leaderboard">
+          <div class="section-head">
+            <div>
+              <h2>Leaderboard</h2>
+              <p id="leaderLabel">No leader</p>
+            </div>
+            <span id="progressBadge">0 / 15</span>
+          </div>
+          <div class="table-wrap">
+            <table class="standings-table">
+              <thead>
+                <tr>
+                  <th>Player</th>
+                  <th title="Sets won out of sets played">Wins</th>
+                  <th class="muted-col" title="Where they would finish if they won every set they have left">Possible</th>
+                </tr>
+              </thead>
+              <tbody id="standingsBody"></tbody>
+            </table>
+          </div>
+        </section>
+
+        <section class="schedule-panel" aria-label="Full schedule">
+          <div class="section-head">
+            <div>
+              <h2>Full Schedule</h2>
+              <p id="scheduleMeta">Active set highlighted</p>
+            </div>
+            <span id="activeSetBadge">Set 1</span>
+          </div>
+          <div class="table-wrap">
+            <table class="schedule-table">
+              <thead>
+                <tr>
+                  <th>Set</th>
+                  <th>Round</th>
+                  <th>Home</th>
+                  <th>Score</th>
+                  <th>Away</th>
+                  <th class="sit-col">Sitting</th>
+                  <th>Status</th>
+                </tr>
+              </thead>
+              <tbody id="scheduleBody"></tbody>
+            </table>
+          </div>
+        </section>
+
+        <section class="setup-panel" aria-label="Setup">
+          <div class="section-head">
+            <div>
+              <h2>Setup</h2>
+              <p>Format, players and race length</p>
+            </div>
+          </div>
+
+          <div class="setup-block">
+            <span class="setup-label">Format</span>
+            <div class="mode-switch" id="modeSwitch" role="group" aria-label="Play format">
+              <button type="button" class="mode-button" data-mode="doubles5">2P RR 5</button>
+              <button type="button" class="mode-button" data-mode="doubles4">2P RR 4</button>
+              <button type="button" class="mode-button" data-mode="singles">1P Match</button>
+              <button type="button" class="mode-button" data-mode="match2">2P Match</button>
+            </div>
+            <p class="setup-hint" id="modeHint"></p>
+          </div>
+
+          <div class="setup-block">
+            <span class="setup-label">Line-up</span>
+            <div class="lineup-pickers" id="lineupPickers"></div>
+          </div>
+
+          <div class="setup-block" id="raceBlock">
+            <span class="setup-label">Race</span>
+            <div class="race-row">
+              <label class="player-field race-field" id="doublesRaceField">
+                <span>Race to</span>
+                <input id="raceTarget" type="number" min="1" max="9" value="3" inputmode="numeric">
+              </label>
+              <div class="singles-handicaps" id="singlesHandicaps" hidden>
+                <label class="player-field race-field">
+                  <span id="targetALabel">Player A to</span>
+                  <input id="targetA" type="number" min="1" max="9" value="3" inputmode="numeric">
+                </label>
+                <label class="player-field race-field">
+                  <span id="targetBLabel">Player B to</span>
+                  <input id="targetB" type="number" min="1" max="9" value="3" inputmode="numeric">
+                </label>
+              </div>
+            </div>
+          </div>
+
+          <div class="setup-block">
+            <span class="setup-label">Break</span>
+            <div class="mode-switch" id="breakRuleSwitch" role="group" aria-label="Break rule">
+              <button type="button" class="mode-button" data-break-rule="alternate">Alternate break</button>
+              <button type="button" class="mode-button" data-break-rule="winner">Winner breaks</button>
+            </div>
+            <p class="setup-hint" id="breakRuleHint"></p>
+          </div>
+
+          <div class="setup-block">
+            <span class="setup-label">Names on the scoreboard</span>
+            <div class="mode-switch" id="nameStyleSwitch" role="group" aria-label="Name display">
+              <button type="button" class="mode-button" data-name-style="first">First name</button>
+              <button type="button" class="mode-button" data-name-style="full">Full name</button>
+            </div>
+            <p class="setup-hint" id="nameStyleHint"></p>
+          </div>
+
+          <div class="setup-block">
+            <span class="setup-label">Player list</span>
+            <div class="roster" id="rosterList"></div>
+            <form class="roster-add" id="rosterAddForm">
+              <input id="rosterAddInput" type="text" placeholder="Add a player name" autocomplete="off" maxlength="24">
+              <button type="submit" class="ghost-button">Add</button>
+            </form>
+          </div>
+        </section>
+
+        <section class="install-panel" id="installPanel" aria-label="Install the app" hidden>
+          <div class="section-head">
+            <div>
+              <h2>Install the app</h2>
+              <p>Adds it to the Start menu and runs it in its own window - no server needed afterwards.</p>
+            </div>
+            <button type="button" class="primary-button" id="installButton">Install app</button>
+          </div>
+        </section>
+
+        <section class="share-panel" aria-label="Live sharing">
+          <div class="section-head">
+            <div>
+              <h2>Share live score</h2>
+              <p id="shareStatus">Checking for live sharing...</p>
+            </div>
+          </div>
+          <div id="shareBody"></div>
+        </section>
+      </main>
+    </div>
+
+    <script src="assets/qrcode.js" defer></script>
+    <script src="app.js" defer></script>
+  </body>
+</html>

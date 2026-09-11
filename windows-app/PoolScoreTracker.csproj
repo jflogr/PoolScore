@@ -1,0 +1,51 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <OutputType>WinExe</OutputType>
+    <TargetFramework>net10.0-windows</TargetFramework>
+    <UseWindowsForms>true</UseWindowsForms>
+    <Nullable>enable</Nullable>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <AssemblyName>PoolScoreTracker</AssemblyName>
+    <RootNamespace>PoolScoreTracker</RootNamespace>
+    <ApplicationIcon>app.ico</ApplicationIcon>
+
+    <Product>Pool Score Tracker</Product>
+    <AssemblyTitle>Pool Score Tracker</AssemblyTitle>
+    <Version>1.0.0</Version>
+
+    <!-- One file to hand over: the runtime and the web assets travel inside it. -->
+    <PublishSingleFile>true</PublishSingleFile>
+    <SelfContained>true</SelfContained>
+    <RuntimeIdentifier>win-x64</RuntimeIdentifier>
+    <IncludeNativeLibrariesForSelfExtract>true</IncludeNativeLibrariesForSelfExtract>
+    <EnableCompressionInSingleFile>true</EnableCompressionInSingleFile>
+    <SatelliteResourceLanguages>en</SatelliteResourceLanguages>
+
+    <!-- publish exactly one file: no IntelliSense xml, no debug symbols -->
+    <AllowedReferenceRelatedFileExtensions>none</AllowedReferenceRelatedFileExtensions>
+    <DebugType>none</DebugType>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <!-- Kestrel, so the app serves the phone view itself and Node is not needed.
+         Kestrel binds the socket directly; HttpListener would need a urlacl or
+         elevation to accept anything but loopback, which rules it out here. -->
+    <FrameworkReference Include="Microsoft.AspNetCore.App" />
+    <PackageReference Include="QRCoder" Version="1.6.0" />
+  </ItemGroup>
+
+  <!--
+    Everything the exe needs travels inside it, so the published app really is
+    one file. The browser version one folder up is a separate deliverable and is
+    no longer embedded here - this app draws its own scoreboard.
+  -->
+  <ItemGroup>
+    <!-- also embedded, so the window and taskbar can show it at runtime -->
+    <EmbeddedResource Include="app.ico" LogicalName="PoolScoreTracker.app.ico" />
+
+    <!-- the read-only page phones get, served by Kestrel -->
+    <EmbeddedResource Include="Server\phone.html" LogicalName="web/phone.html" />
+  </ItemGroup>
+
+</Project>
