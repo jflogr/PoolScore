@@ -50,10 +50,10 @@ $files = @(
 
 # Present in the folder but never in the zip: runtime state, dev config, the
 # build script itself and the archive it produces.
-$notShipped = @('session.json', 'build.ps1', $zipName)
+$notShipped = @('session.json', 'build.ps1', '.gitignore', '.gitattributes', $zipName)
 
 # The standalone Windows app is its own deliverable, built by -App below.
-$notShippedFolders = @('windows-app/')
+$notShippedFolders = @('windows-app/', '.git/')
 
 function Get-DiskPath([string]$relative) {
   return (Join-Path $root $relative.Replace('/', '\'))

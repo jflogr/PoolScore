@@ -234,22 +234,29 @@ public sealed class MainWindow : Form
         _commands.GripStyle = ToolStripGripStyle.Hidden;
         _commands.BackColor = Paper;
         _commands.Padding = new Padding(8, 6, 8, 6);
-        _commands.ImageScalingSize = new Size(24, 24);
         _commands.Font = new Font(FontFamily.GenericSansSerif, 10.5f);
         _commands.Renderer = new ToolStripProfessionalRenderer { RoundedEdges = false };
 
-        _newMatch = Command("New match", Icons.NewMatch, _session.StartNewMatch);
-        _undo = Command("Undo last", Icons.Undo, _session.UndoLastCommit);
+        // Rendered at whatever this display actually needs, so the outlines stay
+        // sharp on a scaled screen instead of being a 24px bitmap stretched up.
+        var icon = (int)Math.Round(24 * DeviceDpi / 96.0);
+        _commands.ImageScalingSize = new Size(icon, icon);
+
+        _newMatch = Command("New match", Icons.AddCircle, icon, _session.StartNewMatch);
+        _undo = Command("Undo last", Icons.Undo, icon, _session.UndoLastCommit);
 
         _commands.Items.Add(_newMatch);
         _commands.Items.Add(_undo);
-        _commands.Items.Add(Command("Swap break", Icons.Swap, _session.SwapBreak));
+        _commands.Items.Add(Command("Swap break", Icons.SwapHoriz, icon, _session.SwapBreak));
         _commands.Items.Add(new ToolStripSeparator());
-        _commands.Items.Add(Command("Players", Icons.Players, ShowPlayers));
-        _commands.Items.Add(Command("Banner", Icons.Banner, ToggleBanner));
+        _commands.Items.Add(Command("Players", Icons.Group, icon, ShowPlayers));
+        _commands.Items.Add(Command("Banner", Icons.Tv, icon, ToggleBanner));
         _commands.Items.Add(new ToolStripSeparator());
-        _commands.Items.Add(Command("Reset", Icons.Reset, ResetScores));
+        _commands.Items.Add(Command("Reset", Icons.RestartAlt, icon, ResetScores));
     }
+
+    private static ToolStripButton Command(string text, string iconPath, int iconSize, Action onClick) =>
+        Command(text, Icons.Render(iconPath, iconSize, Ink), onClick);
 
     private static ToolStripButton Command(string text, Image icon, Action onClick)
     {
