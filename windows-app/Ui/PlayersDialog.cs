@@ -94,7 +94,7 @@ public sealed class PlayersDialog : Form
         // Red on the selection highlight all but disappears.
         _binSelected = Icons.Render(Icons.Delete, size, Color.White);
 
-        _commands.Items.Add(Command("Add player", Icons.Add, size, Add));
+        _commands.Items.Add(Command("Add players", Icons.Add, size, Add));
         _edit = Command("Rename", Icons.Edit, size, Rename);
         _commands.Items.Add(_edit);
     }
@@ -194,10 +194,67 @@ public sealed class PlayersDialog : Form
     private RosterPlayer? Selected() =>
         _roster.SelectedItems.Count == 0 ? null : _roster.SelectedItems[0].Tag as RosterPlayer;
 
+    /// <summary>
+    /// Takes a whole list at once - a pool night starts by typing everyone in,
+    /// and one name per dialog is a poor way to spend it.
+    /// </summary>
     private void Add()
     {
-        var name = Prompt("Add player", string.Empty);
-        if (name is not null) _session.AddPlayer(name);
+        using var dialog = new Form
+        {
+            Text = "Add players",
+            FormBorderStyle = FormBorderStyle.FixedDialog,
+            StartPosition = FormStartPosition.CenterParent,
+            ClientSize = new Size(400, 340),
+            MinimizeBox = false,
+            MaximizeBox = false,
+            Icon = Icon,
+            ShowInTaskbar = false
+        };
+
+        var hint = new Label
+        {
+            Text = "One player per line.",
+            Location = new Point(16, 14),
+            AutoSize = true,
+            ForeColor = ColorTranslator.FromHtml("#5b6b7d")
+        };
+
+        var input = new TextBox
+        {
+            Multiline = true,
+            AcceptsReturn = true,
+            ScrollBars = ScrollBars.Vertical,
+            WordWrap = false,
+            Location = new Point(16, 40),
+            Size = new Size(368, 216),
+            Font = new Font(FontFamily.GenericSansSerif, 12f)
+        };
+
+        var add = new Button
+        {
+            Text = "Add",
+            DialogResult = DialogResult.OK,
+            Location = new Point(204, 272),
+            Size = new Size(88, 44)
+        };
+
+        var cancel = new Button
+        {
+            Text = "Cancel",
+            DialogResult = DialogResult.Cancel,
+            Location = new Point(300, 272),
+            Size = new Size(88, 44)
+        };
+
+        // No AcceptButton here: Return belongs to the text box, since that is
+        // how you get to the next player.
+        dialog.Controls.AddRange([hint, input, add, cancel]);
+        dialog.CancelButton = cancel;
+
+        if (dialog.ShowDialog(this) != DialogResult.OK) return;
+
+        _session.AddPlayers(input.Lines);
     }
 
     private void Rename()

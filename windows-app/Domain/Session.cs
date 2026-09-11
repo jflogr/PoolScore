@@ -505,12 +505,28 @@ public sealed class Session
 
     // -------------------------------------------------------------- roster
 
-    public void AddPlayer(string name)
-    {
-        var trimmed = name.Trim();
-        if (trimmed.Length == 0) return;
+    public void AddPlayer(string name) => AddPlayers([name]);
 
-        Roster.Add(new RosterPlayer($"r{_nextRosterId++}", trimmed));
+    /// <summary>
+    /// Adds everyone in one go. Blanks are skipped, and the whole lot counts as
+    /// a single change - adding a team one name at a time would otherwise save
+    /// and re-publish once per player.
+    /// </summary>
+    public void AddPlayers(IEnumerable<string> names)
+    {
+        var added = false;
+
+        foreach (var name in names)
+        {
+            var trimmed = name.Trim();
+            if (trimmed.Length == 0) continue;
+
+            Roster.Add(new RosterPlayer($"r{_nextRosterId++}", trimmed));
+            added = true;
+        }
+
+        if (!added) return;
+
         FillEmptyLineupSlots();
         RefreshNames();
         Notify();

@@ -15,6 +15,12 @@ public sealed class MainWindow : Form
     /// <summary>Comfortable to tap, no bigger - this is not scoreboard furniture.</summary>
     private const int TouchHeight = 46;
 
+    /// <summary>
+    /// As narrow as a phone camera will still read at arm's length. The address
+    /// under it is the fallback if it will not scan.
+    /// </summary>
+    private const int QrSize = 116;
+
     private static readonly Color Ink = ColorTranslator.FromHtml("#2b3846");
     private static readonly Color Paper = ColorTranslator.FromHtml("#f5f7fa");
 
@@ -46,20 +52,15 @@ public sealed class MainWindow : Form
 
     private readonly PictureBox _qrView = new()
     {
-        Size = new Size(120, 120),
         SizeMode = PictureBoxSizeMode.Zoom,
         BackColor = Color.White,
-        Margin = new Padding(0, 4, 0, 6),
         Visible = false
     };
 
     private readonly Label _phoneLabel = new()
     {
-        AutoSize = true,
-        MaximumSize = new Size(260, 0),
         ForeColor = ColorTranslator.FromHtml("#5b6b7d"),
-        Font = new Font(FontFamily.GenericSansSerif, 10.5f),
-        Margin = new Padding(0, 4, 0, 0)
+        Font = new Font(FontFamily.GenericSansSerif, 8f)
     };
 
     // Scoring a rack fires several changes in a row; saving on a short delay
@@ -98,8 +99,9 @@ public sealed class MainWindow : Form
         _scoring.ActionClicked += (_, _) => FinishSet();
 
         // Docking resolves from the last control added outwards, so this reads
-        // backwards: toolbar at the very top, then the scoreboard, the phone
-        // strip along the bottom, and the tabs filling what is left.
+        // backwards: toolbar at the very top, then the scoreboard full width,
+        // then the phone strip down the right of what is left, and the tabs
+        // filling the rest.
         Controls.Add(_tabs);
         Controls.Add(BuildPhoneStrip());
         Controls.Add(_scoring);
@@ -155,7 +157,9 @@ public sealed class MainWindow : Form
                 return;
             }
 
-            _phoneLabel.Text = address;
+            // Shown without the scheme so it fits the narrow strip on one line
+            // instead of wrapping mid-port. The code itself carries the full URL.
+            _phoneLabel.Text = address.Replace("http://", string.Empty).TrimEnd('/');
             _qrView.Image = MakeQr(address);
             _qrView.Visible = _qrView.Image is not null;
         }
@@ -259,37 +263,42 @@ public sealed class MainWindow : Form
     }
 
     /// <summary>
-    /// The scan-to-watch code, along the bottom where it is always in view.
-    /// It lived on the settings tab, which meant hunting for it whenever
+    /// The scan-to-watch code, down the right-hand side where it is always in
+    /// view. It lived on the settings tab, which meant hunting for it whenever
     /// somebody new wanted to follow the game.
+    ///
+    /// Docked after the scoreboard on purpose, so it takes its width from the
+    /// tabs below rather than narrowing the scoreboard - that is the part that
+    /// has to be read from across the room.
     /// </summary>
     private Control BuildPhoneStrip()
     {
         var strip = new Panel
         {
-            Dock = DockStyle.Bottom,
-            Height = _qrView.Height + 20,
+            Dock = DockStyle.Right,
+            Width = QrSize + 12,
             BackColor = Paper,
-            Padding = new Padding(10)
+            Padding = new Padding(6, 10, 6, 8)
         };
 
         // Stays hidden until the server is up and there is a code to show,
         // rather than flashing an empty white square on startup.
-        _qrView.Dock = DockStyle.Left;
+        _qrView.Dock = DockStyle.Top;
+        _qrView.Height = QrSize;
 
-        var caption = new FlowLayoutPanel
-        {
-            Dock = DockStyle.Fill,
-            FlowDirection = FlowDirection.TopDown,
-            WrapContents = false,
-            Padding = new Padding(14, 8, 0, 0)
-        };
+        _phoneLabel.Dock = DockStyle.Top;
+        _phoneLabel.AutoSize = true;
+        _phoneLabel.MaximumSize = new Size(QrSize + 4, 0);
+        _phoneLabel.Padding = new Padding(0, 6, 0, 0);
 
-        caption.Controls.Add(Heading("Watch on a phone"));
-        caption.Controls.Add(_phoneLabel);
+        var heading = Heading("Scan to watch");
+        heading.Dock = DockStyle.Top;
+        heading.Margin = Padding.Empty;
 
-        strip.Controls.Add(caption);
+        // Added bottom-up: heading, then code, then the address under it.
+        strip.Controls.Add(_phoneLabel);
         strip.Controls.Add(_qrView);
+        strip.Controls.Add(heading);
         return strip;
     }
 
