@@ -4,14 +4,16 @@ namespace PoolScoreTracker.Ui;
 
 /// <summary>
 /// The roster, out of the way until you need it. Edits apply straight to the
-/// session, so there is nothing to save or cancel - closing it is the only
-/// thing left to do.
+/// session, so there is nothing to save or cancel and the window's own close
+/// button is the only way out it needs.
 /// </summary>
 public sealed class PlayersDialog : Form
 {
-    private const int TouchHeight = 46;
+    private static readonly Color Ink = ColorTranslator.FromHtml("#2b3846");
+    private static readonly Color Danger = ColorTranslator.FromHtml("#b23b3b");
 
     private readonly Session _session;
+    private readonly ToolStrip _commands = new();
     private readonly ListView _roster = new()
     {
         Dock = DockStyle.Fill,
@@ -19,47 +21,53 @@ public sealed class PlayersDialog : Form
         FullRowSelect = true,
         HeaderStyle = ColumnHeaderStyle.Nonclickable,
         BorderStyle = BorderStyle.None,
+        OwnerDraw = true,
         Font = new Font(FontFamily.GenericSansSerif, 11.5f)
     };
+
+    private ToolStripButton _edit = null!;
+    private Bitmap _bin = null!;
+    private Bitmap _binSelected = null!;
+    private int _binColumnWidth;
 
     public PlayersDialog(Session session)
     {
         _session = session;
 
         Text = "Players";
-        FormBorderStyle = FormBorderStyle.Sizable;
         StartPosition = FormStartPosition.CenterParent;
         ClientSize = new Size(520, 460);
-        MinimumSize = new Size(420, 360);
+        MinimumSize = new Size(400, 340);
         MinimizeBox = false;
+        MaximizeBox = false;
         ShowInTaskbar = false;
+        Icon = Icons.App;
         BackColor = ColorTranslator.FromHtml("#f5f7fa");
-        Padding = new Padding(12);
 
-        _roster.Columns.Add("Player", 260);
-        _roster.Columns.Add("Shown as", 170);
+        BuildCommands();
+
+        _binColumnWidth = _commands.ImageScalingSize.Width * 2;
+        _roster.Columns.Add("Player", 300);
+        _roster.Columns.Add(string.Empty, _binColumnWidth);
+
+        _roster.DrawColumnHeader += DrawHeader;
+        _roster.DrawItem += DrawRow;
+        _roster.MouseClick += OnRosterClick;
         _roster.DoubleClick += (_, _) => Rename();
-
-        var buttons = new FlowLayoutPanel
-        {
-            Dock = DockStyle.Bottom,
-            Height = TouchHeight + 14,
-            Padding = new Padding(0, 8, 0, 0)
-        };
-
-        buttons.Controls.Add(Button("Add", Add));
-        buttons.Controls.Add(Button("Rename", Rename));
-        buttons.Controls.Add(Button("Remove", Remove));
-
-        var close = Button("Close", Close);
-        close.Margin = new Padding(28, 0, 0, 0);
-        buttons.Controls.Add(close);
+        _roster.SelectedIndexChanged += (_, _) => SyncCommands();
+        _roster.Resize += (_, _) => FitColumns();
 
         Controls.Add(_roster);
-        Controls.Add(buttons);
+        Controls.Add(_commands);
 
         _session.Changed += OnSessionChanged;
         Fill();
+    }
+
+    protected override void OnShown(EventArgs e)
+    {
+        base.OnShown(e);
+        FitColumns();
     }
 
     protected override void OnFormClosed(FormClosedEventArgs e)
@@ -70,23 +78,100 @@ public sealed class PlayersDialog : Form
 
     private void OnSessionChanged(object? sender, EventArgs e) => Fill();
 
-    private static Button Button(string text, Action onClick)
+    private void BuildCommands()
     {
-        var button = new Button
+        _commands.Dock = DockStyle.Top;
+        _commands.GripStyle = ToolStripGripStyle.Hidden;
+        _commands.BackColor = ColorTranslator.FromHtml("#f5f7fa");
+        _commands.Padding = new Padding(6, 6, 6, 6);
+        _commands.Font = new Font(FontFamily.GenericSansSerif, 10.5f);
+        _commands.Renderer = new ToolStripProfessionalRenderer { RoundedEdges = false };
+
+        var size = (int)Math.Round(24 * DeviceDpi / 96.0);
+        _commands.ImageScalingSize = new Size(size, size);
+        _bin = Icons.Render(Icons.Delete, size, Danger);
+
+        // Red on the selection highlight all but disappears.
+        _binSelected = Icons.Render(Icons.Delete, size, Color.White);
+
+        _commands.Items.Add(Command("Add player", Icons.Add, size, Add));
+        _edit = Command("Rename", Icons.Edit, size, Rename);
+        _commands.Items.Add(_edit);
+    }
+
+    private static ToolStripButton Command(string text, string iconPath, int size, Action onClick)
+    {
+        var button = new ToolStripButton(text, Icons.Render(iconPath, size, Ink))
         {
-            Text = text,
-            AutoSize = true,
-            AutoSizeMode = AutoSizeMode.GrowAndShrink,
-            MinimumSize = new Size(88, TouchHeight),
-            Padding = new Padding(12, 0, 12, 0),
-            Margin = new Padding(0, 0, 8, 0),
-            FlatStyle = FlatStyle.System,
-            Font = new Font(FontFamily.GenericSansSerif, 11f)
+            DisplayStyle = ToolStripItemDisplayStyle.ImageAndText,
+            TextImageRelation = TextImageRelation.ImageBeforeText,
+            Padding = new Padding(6, 4, 6, 4),
+            Margin = new Padding(2, 0, 2, 0),
+            AutoSize = true
         };
 
         button.Click += (_, _) => onClick();
         return button;
     }
+
+    /// <summary>The name column takes whatever the bin column does not.</summary>
+    private void FitColumns()
+    {
+        if (_roster.Columns.Count < 2) return;
+
+        var available = _roster.ClientSize.Width - _binColumnWidth;
+        if (available > 80) _roster.Columns[0].Width = available;
+    }
+
+    // --------------------------------------------------------------- drawing
+
+    private static void DrawHeader(object? sender, DrawListViewColumnHeaderEventArgs e) => e.DrawDefault = true;
+
+    /// <summary>
+    /// Drawn by hand so each row can carry its own bin. A ListView has no way
+    /// to put a control in a cell, and a delete that lives on the row it
+    /// deletes is worth the drawing code.
+    /// </summary>
+    private void DrawRow(object? sender, DrawListViewItemEventArgs e)
+    {
+        var selected = e.Item.Selected;
+        var background = selected ? SystemColors.Highlight : _roster.BackColor;
+
+        using (var brush = new SolidBrush(background))
+        {
+            e.Graphics.FillRectangle(brush, e.Bounds);
+        }
+
+        var name = e.Item.Text;
+        var nameArea = new Rectangle(
+            e.Bounds.Left + 6, e.Bounds.Top,
+            Math.Max(0, e.Bounds.Width - _binColumnWidth - 12), e.Bounds.Height);
+
+        TextRenderer.DrawText(e.Graphics, name, _roster.Font, nameArea,
+            selected ? SystemColors.HighlightText : Ink,
+            TextFormatFlags.Left | TextFormatFlags.VerticalCenter | TextFormatFlags.EndEllipsis);
+
+        e.Graphics.DrawImage(selected ? _binSelected : _bin, BinBounds(e.Bounds));
+    }
+
+    private Rectangle BinBounds(Rectangle row)
+    {
+        var size = _bin.Width;
+        return new Rectangle(
+            row.Right - _binColumnWidth + (_binColumnWidth - size) / 2,
+            row.Top + (row.Height - size) / 2,
+            size, size);
+    }
+
+    private void OnRosterClick(object? sender, MouseEventArgs e)
+    {
+        var hit = _roster.HitTest(e.Location);
+        if (hit.Item is null) return;
+
+        if (BinBounds(hit.Item.Bounds).Contains(e.Location)) Remove(hit.Item.Tag as RosterPlayer);
+    }
+
+    // ---------------------------------------------------------------- edits
 
     private void Fill()
     {
@@ -97,28 +182,14 @@ public sealed class PlayersDialog : Form
 
         foreach (var player in _session.Roster)
         {
-            // What the scoreboard will actually show for them, shortened.
-            var slot = _session.Current.Lineup.IndexOf(player.Id);
-            var shown = slot >= 0 ? ShownAs(slot) : "not playing";
-
-            _roster.Items.Add(new ListViewItem([player.Name, shown]) { Tag = player });
+            _roster.Items.Add(new ListViewItem(player.Name) { Tag = player });
         }
 
         _roster.EndUpdate();
+        SyncCommands();
     }
 
-    private string ShownAs(int slot)
-    {
-        if (_session.IsRoundRobin) return _session.NameFor($"p{slot + 1}");
-
-        // In a match the slots map straight onto the two sides.
-        var view = _session.View();
-        var size = _session.Config.TeamSize;
-
-        return slot < size
-            ? view.HomeNames.ElementAtOrDefault(slot) ?? "-"
-            : view.AwayNames.ElementAtOrDefault(slot - size) ?? "-";
-    }
+    private void SyncCommands() => _edit.Enabled = Selected() is not null;
 
     private RosterPlayer? Selected() =>
         _roster.SelectedItems.Count == 0 ? null : _roster.SelectedItems[0].Tag as RosterPlayer;
@@ -137,12 +208,13 @@ public sealed class PlayersDialog : Form
         if (name is not null) _session.RenamePlayer(player.Id, name);
     }
 
-    private void Remove()
+    private void Remove(RosterPlayer? player)
     {
-        if (Selected() is not { } player) return;
+        if (player is null) return;
 
-        var answer = MessageBox.Show(this, $"Remove {player.Name} from the list?", "Players",
-            MessageBoxButtons.YesNo, MessageBoxIcon.Question);
+        var answer = MessageBox.Show(this,
+            $"Remove {player.Name} from the list?", "Players",
+            MessageBoxButtons.YesNo, MessageBoxIcon.Warning, MessageBoxDefaultButton.Button2);
 
         if (answer == DialogResult.Yes) _session.RemovePlayer(player.Id);
     }
@@ -157,7 +229,9 @@ public sealed class PlayersDialog : Form
             StartPosition = FormStartPosition.CenterParent,
             ClientSize = new Size(380, 140),
             MinimizeBox = false,
-            MaximizeBox = false
+            MaximizeBox = false,
+            Icon = Icon,
+            ShowInTaskbar = false
         };
 
         var input = new TextBox

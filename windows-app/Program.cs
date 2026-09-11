@@ -1,4 +1,3 @@
-using System.Reflection;
 using PoolScoreTracker.Domain;
 using PoolScoreTracker.Ui;
 
@@ -17,24 +16,6 @@ internal static class Program
         ApplicationConfiguration.Initialize();
 
         var session = SessionStore.Load();
-        var window = new MainWindow(session);
-
-        var icon = LoadIcon();
-        if (icon is not null) window.Icon = icon;
-
-        Application.Run(window);
-    }
-
-    private static Icon? LoadIcon()
-    {
-        try
-        {
-            var stream = Assembly.GetExecutingAssembly().GetManifestResourceStream("PoolScoreTracker.app.ico");
-            return stream is null ? null : new Icon(stream);
-        }
-        catch
-        {
-            return null; // the default window icon will do
-        }
+        Application.Run(new MainWindow(session) { Icon = Icons.App });
     }
 }
