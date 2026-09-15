@@ -135,14 +135,22 @@ public sealed class ScoringPanel : Control
         var numberTop = pad + nameHeight;
         var numberHeight = buttonTop - numberTop - pad / 2;
 
+        // A line of its own under each score for the race. Taken out of the
+        // number's share rather than the buttons', which have to stay big
+        // enough to tap on a laptop touchscreen.
+        var raceHeight = Math.Clamp((int)(numberHeight * 0.14f), 13, 30);
+        numberHeight -= raceHeight;
+
         DrawSide(g, isHome: true,
             column: new Rectangle(pad, pad, columnWidth - pad * 2, nameHeight),
             number: new Rectangle(pad, numberTop, columnWidth - pad * 2, numberHeight),
+            race: new Rectangle(pad, numberTop + numberHeight, columnWidth - pad * 2, raceHeight),
             buttons: new Rectangle(pad, buttonTop, columnWidth - pad * 2, buttonHeight));
 
         DrawSide(g, isHome: false,
             column: new Rectangle(w - columnWidth + pad, pad, columnWidth - pad * 2, nameHeight),
             number: new Rectangle(w - columnWidth + pad, numberTop, columnWidth - pad * 2, numberHeight),
+            race: new Rectangle(w - columnWidth + pad, numberTop + numberHeight, columnWidth - pad * 2, raceHeight),
             buttons: new Rectangle(w - columnWidth + pad, buttonTop, columnWidth - pad * 2, buttonHeight));
 
         // Two narrow bars down the middle, running the whole height.
@@ -161,16 +169,18 @@ public sealed class ScoringPanel : Control
         DrawAction(g, w, h);
     }
 
-    private void DrawSide(Graphics g, bool isHome, Rectangle column, Rectangle number, Rectangle buttons)
+    private void DrawSide(Graphics g, bool isHome, Rectangle column, Rectangle number, Rectangle race, Rectangle buttons)
     {
         var names = isHome ? _state.HomeNames : _state.AwayNames;
         var breaking = _state.Breaking == (isHome ? Side.Home : Side.Away);
         var score = isHome ? _state.HomeScore : _state.AwayScore;
+        var target = isHome ? _state.HomeTarget : _state.AwayTarget;
         var won = isHome ? _state.HomeWon : _state.AwayWon;
         var onHill = isHome ? _state.HomeOnHill : _state.AwayOnHill;
 
         DrawNames(g, column, names, breaking, isHome);
         DrawBigNumber(g, number, score, Shade(won, onHill));
+        DrawRace(g, race, target);
 
         var gap = (int)(buttons.Width * 0.05);
         var buttonWidth = (buttons.Width - gap) / 2;
@@ -251,6 +261,27 @@ public sealed class ScoringPanel : Control
 
         using var brush = new SolidBrush(colour);
         g.FillPath(brush, path);
+    }
+
+    /// <summary>
+    /// The race, under the score. Small and muted on purpose: the bar already
+    /// says how far along a side is, this says what it is chasing. It is drawn
+    /// per side rather than once, because on a handicap the two sides are
+    /// chasing different numbers and one figure could only be right for both
+    /// by luck.
+    /// </summary>
+    private static void DrawRace(Graphics g, Rectangle area, int target)
+    {
+        if (target < 1 || area.Height < 10 || area.Width < 40) return;
+
+        var text = $"RACE TO {target}";
+        using var font = new Font(FontFamily.GenericSansSerif, area.Height * 0.74f, FontStyle.Bold, GraphicsUnit.Pixel);
+
+        var size = g.MeasureString(text, font);
+        using var brush = new SolidBrush(Hint);
+        g.DrawString(text, font, brush,
+            area.Left + (area.Width - size.Width) / 2f,
+            area.Top + (area.Height - size.Height) / 2f);
     }
 
     /// <summary>

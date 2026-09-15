@@ -71,6 +71,10 @@ TWO WAYS TO RUN IT
    filling as racks are won. They turn pale gold when a side is on the hill and
    full gold once it has won.
 
+   Under each score is the race that side is chasing - "RACE TO 3" - small and
+   grey, because the number rarely changes and the score always does. On a
+   handicap the two sides show different numbers, which is the point of it.
+
    Score with the big -/+ buttons, or from the keyboard:
      A       add a rack to the left side      ALT+A   take one off
      B       add a rack to the right side     ALT+B   take one off
@@ -143,7 +147,22 @@ WINDOWS APP - watching only
 - Phones get a read-only view: the live score, the leaderboard and the full
   schedule. They cannot change anything, so nobody can break the setup mid-game.
 - The first run raises a Windows firewall prompt, because the app has to accept
-  connections from the wifi. Say no and everything still works except this.
+  connections from the wifi. Tick BOTH private and public networks. A laptop
+  that has never been told the house wifi is trusted counts it as public, so
+  ticking only private blocks the very connection the phones need.
+- Cancelling that prompt - or closing it, which counts as cancelling - is
+  remembered as a block, and nothing asks again. The app cannot tell: Windows
+  is turning the phones away at the door, so the address and the QR code still
+  look exactly right while no phone can load the page. If that has happened:
+    Windows Security > Firewall & network protection >
+    Allow an app through firewall > Change settings, find "Pool Score", and
+    tick both Private and Public. If it is listed more than once, tick them all.
+- Guest, hotel and some pub wifi turns on client isolation, which stops two
+  devices on the same network from reaching each other at all. Nothing on this
+  PC can change that - use a phone hotspot instead.
+- The address is re-read whenever this PC's network changes, so a laptop that
+  joins the wifi after the app is already open, or picks up a different address
+  part way through the night, brings the QR code up to date on its own.
 - If something else has port 4174, the Match settings tab says so and the rest
   of the app carries on as normal.
 
@@ -164,6 +183,11 @@ WINDOWS APP
   but the score line. In OBS add a Window Capture and pick
   "[PoolScore.exe]: Pool Score Banner". No cropping needed - the window
   is exactly the size it captures at.
+- The race sits between the two scores in brackets: (3) while both sides are
+  chasing the same total, and (3/5) - home first - when a handicap has them
+  chasing different ones.
+- The scoring keys work in this window too, so clicking the banner to drag it
+  onto the right monitor does not leave the keyboard dead.
 - Any capture method works, including BitBlt, and it keeps working while the
   window is behind others. The banner is drawn by the app itself rather than by
   a browser engine, which is what makes that true.

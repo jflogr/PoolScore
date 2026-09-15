@@ -43,6 +43,13 @@ public sealed class ScoreServer : IAsyncDisposable
 
     public bool Running => _app is not null;
 
+    /// <summary>
+    /// Raised when the addresses a phone could use have changed - a laptop that
+    /// joined the wifi after the app opened, or picked up a different lease
+    /// part way through the night. Arrives on a background thread.
+    /// </summary>
+    public event EventHandler? AddressesChanged;
+
     public async Task<bool> StartAsync(int port = 4174)
     {
         if (_app is not null) return true;
@@ -72,7 +79,12 @@ public sealed class ScoreServer : IAsyncDisposable
 
             _app = app;
             Port = port;
-            Addresses = [.. LanAddresses().Select(address => $"http://{address}:{port}/")];
+            Addresses = Reachable();
+
+            // Kestrel is listening on every address the machine has, including
+            // the ones it does not have yet, so a late-joining network needs
+            // nothing reopened - only the address on screen brought up to date.
+            NetworkChange.NetworkAddressChanged += OnNetworkChanged;
             return true;
         }
         catch (Exception)
@@ -89,6 +101,8 @@ public sealed class ScoreServer : IAsyncDisposable
         var app = _app;
         _app = null;
         if (app is null) return;
+
+        NetworkChange.NetworkAddressChanged -= OnNetworkChanged;
 
         lock (_gate)
         {
@@ -181,20 +195,65 @@ public sealed class ScoreServer : IAsyncDisposable
         return reader.ReadToEnd();
     }
 
+    private void OnNetworkChanged(object? sender, EventArgs e)
+    {
+        if (_app is null) return;
+
+        var refreshed = Reachable();
+        if (refreshed.SequenceEqual(Addresses)) return;
+
+        Addresses = refreshed;
+        AddressesChanged?.Invoke(this, EventArgs.Empty);
+    }
+
+    private IReadOnlyList<string> Reachable() =>
+        [.. LanAddresses().Select(address => $"http://{address}:{Port}/")];
+
     /// <summary>
-    /// Home and office ranges first, so the address offered to a phone is one
-    /// it can actually reach - Hyper-V and WSL both hand out 172.x addresses
-    /// that go nowhere useful.
+    /// Addresses a phone on the same wifi could actually open, best first.
+    ///
+    /// The hard part is not finding addresses but discarding the ones that only
+    /// look right. Hyper-V, WSL, VirtualBox, Docker and a VPN client all add
+    /// adapters carrying perfectly ordinary private addresses that no phone can
+    /// reach, and picking one of those fails in the worst possible way: the
+    /// address on screen looks exactly like a good one, so the fault looks like
+    /// the phone, the wifi, or the QR code.
     /// </summary>
-    private static IEnumerable<string> LanAddresses() =>
-        NetworkInterface.GetAllNetworkInterfaces()
+    private static IEnumerable<string> LanAddresses()
+    {
+        var live = NetworkInterface.GetAllNetworkInterfaces()
             .Where(nic => nic.OperationalStatus == OperationalStatus.Up)
-            .Where(nic => nic.NetworkInterfaceType != NetworkInterfaceType.Loopback)
-            .SelectMany(nic => nic.GetIPProperties().UnicastAddresses)
+            .Where(nic => nic.NetworkInterfaceType is not
+                (NetworkInterfaceType.Loopback or NetworkInterfaceType.Tunnel))
+            .Select(nic => nic.GetIPProperties())
+            .ToList();
+
+        // An adapter with a gateway is one that leads somewhere. Virtual
+        // switches and host-only adapters have none, which sorts them out
+        // without having to recognise every product by name.
+        var routed = live
+            .Where(properties => properties.GatewayAddresses.Any(gateway =>
+                gateway.Address.AddressFamily == AddressFamily.InterNetwork
+                && !gateway.Address.Equals(IPAddress.Any)))
+            .ToList();
+
+        // Falling back rather than showing nothing: an unusual setup with no
+        // gateway at all is still better served by a guess than by silence.
+        return Ordered(routed.Count > 0 ? routed : live);
+    }
+
+    /// <summary>Home and office ranges first, since that is where a match is.</summary>
+    private static IEnumerable<string> Ordered(IEnumerable<IPInterfaceProperties> interfaces) =>
+        interfaces
+            .SelectMany(properties => properties.UnicastAddresses)
             .Where(address => address.Address.AddressFamily == AddressFamily.InterNetwork)
             .Select(address => address.Address)
             .Where(address => !IPAddress.IsLoopback(address))
             .Select(address => address.ToString())
+
+            // 169.254.x.x means no DHCP server ever answered. The machine has
+            // an address, but it shares that network with nothing.
+            .Where(address => !address.StartsWith("169.254.", StringComparison.Ordinal))
             .Distinct()
             .OrderBy(Rank)
             .ThenBy(address => address, StringComparer.Ordinal);

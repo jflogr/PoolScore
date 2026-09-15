@@ -150,23 +150,45 @@ public sealed class MainWindow : Form
 
             _server.Publish(Snapshot.From(_session, 0));
 
-            var address = _server.Addresses.FirstOrDefault();
-            if (address is null)
+            // The address can arrive late or change under us - a laptop opened
+            // at the venue may well reach the wifi after the app is already up.
+            _server.AddressesChanged += (_, _) =>
             {
-                _phoneLabel.Text = "Phone view running, but this PC is not on a network.";
-                return;
-            }
+                if (IsDisposed || Disposing || !IsHandleCreated) return;
+                BeginInvoke(ShowPhoneAddress);
+            };
 
-            // Shown without the scheme so it fits the narrow strip on one line
-            // instead of wrapping mid-port. The code itself carries the full URL.
-            _phoneLabel.Text = address.Replace("http://", string.Empty).TrimEnd('/');
-            _qrView.Image = MakeQr(address);
-            _qrView.Visible = _qrView.Image is not null;
+            ShowPhoneAddress();
         }
         catch (Exception)
         {
             if (!IsDisposed) _phoneLabel.Text = "Phone view could not start.";
         }
+    }
+
+    /// <summary>
+    /// The address and code phones scan, redrawn whenever the machine's
+    /// addresses change. Without that a code made at startup outlives the
+    /// address it points at, and the phone gets a page that never loads.
+    /// </summary>
+    private void ShowPhoneAddress()
+    {
+        var address = _server.Addresses.FirstOrDefault();
+        if (address is null)
+        {
+            _phoneLabel.Text = "Phone view running, but this PC is not on a network.";
+            _qrView.Visible = false;
+            return;
+        }
+
+        // Shown without the scheme so it fits the narrow strip on one line
+        // instead of wrapping mid-port. The code itself carries the full URL.
+        _phoneLabel.Text = address.Replace("http://", string.Empty).TrimEnd('/');
+
+        var previous = _qrView.Image;
+        _qrView.Image = MakeQr(address);
+        _qrView.Visible = _qrView.Image is not null;
+        previous?.Dispose();
     }
 
     /// <summary>Scan-to-watch code for the phone view, or null if it cannot be made.</summary>
@@ -213,19 +235,16 @@ public sealed class MainWindow : Form
     }
 
     /// <summary>
-    /// A and B add a rack to that side; hold Alt to take one off. Handled here
-    /// rather than on the panel so they work wherever the focus happens to be -
-    /// except in a dropdown, where a letter belongs to the list.
+    /// A and B add a rack to that side; hold Alt to take one off. Handled on
+    /// the form rather than on the panel so they work wherever the focus
+    /// happens to be - except in a dropdown or a field, where a letter belongs
+    /// to the control that has it.
     /// </summary>
     protected override bool ProcessCmdKey(ref Message message, Keys keyData)
     {
-        var key = keyData & Keys.KeyCode;
-        var alt = (keyData & Keys.Alt) == Keys.Alt;
-        var otherModifier = (keyData & (Keys.Control | Keys.Shift)) != 0;
-
-        if (!otherModifier && key is Keys.A or Keys.B && ActiveControl is not (ComboBox or TextBox))
+        if (Shortcuts.Read(keyData) is { } shortcut && ActiveControl is not (ComboBox or TextBoxBase))
         {
-            _session.Adjust(key == Keys.A ? Side.Home : Side.Away, alt ? -1 : +1);
+            _session.Adjust(shortcut.Side, shortcut.Delta);
             return true;
         }
 
@@ -719,6 +738,7 @@ public sealed class MainWindow : Form
         }
 
         _banner = new BannerForm { Owner = this, State = BuildBannerState(_session) };
+        _banner.Scored += (_, shortcut) => _session.Adjust(shortcut.Side, shortcut.Delta);
         _banner.FormClosed += (_, _) => _banner = null;
         _banner.Location = new Point(Left, Math.Max(0, Top - _banner.Height - 8));
         _banner.Show();

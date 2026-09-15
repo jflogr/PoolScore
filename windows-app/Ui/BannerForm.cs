@@ -19,9 +19,6 @@ public sealed record BannerState(
 {
     public static readonly BannerState Blank = new([], [], 0, 0, 3, 3, null);
 
-    /// <summary>The race, when both sides are chasing the same one.</summary>
-    public int? Race => HomeTarget == AwayTarget ? HomeTarget : null;
-
     public bool HomeWon => HomeScore >= HomeTarget;
     public bool AwayWon => AwayScore >= AwayTarget;
     public bool HomeOnHill => !HomeWon && HomeScore == HomeTarget - 1;
@@ -80,8 +77,26 @@ public sealed class BannerForm : Form
         }
     }
 
+    /// <summary>Raised when a scoring key is pressed while the banner has focus.</summary>
+    public event EventHandler<(Side Side, int Delta)>? Scored;
+
     /// <summary>Exact pixel size for the capture, so OBS needs no cropping.</summary>
     public void SetCaptureSize(int width, int height) => ClientSize = new Size(width, height);
+
+    /// <summary>
+    /// The scoring keys work here too. There are no controls in this window for
+    /// a letter to belong to, so anything the scorer recognises is theirs.
+    /// </summary>
+    protected override bool ProcessCmdKey(ref Message message, Keys keyData)
+    {
+        if (Shortcuts.Read(keyData) is { } shortcut)
+        {
+            Scored?.Invoke(this, shortcut);
+            return true;
+        }
+
+        return base.ProcessCmdKey(ref message, keyData);
+    }
 
     protected override void OnPaint(PaintEventArgs e)
     {
@@ -106,7 +121,7 @@ public sealed class BannerForm : Form
         var dotSpace = dot + gap / 2f;
 
         using var numberFont = new Font(FontFamily.GenericSansSerif, blockHeight * 0.56f, FontStyle.Bold, GraphicsUnit.Pixel);
-        using var raceFont = new Font(FontFamily.GenericSansSerif, blockHeight * 0.24f, FontStyle.Bold, GraphicsUnit.Pixel);
+        using var raceFont = new Font(FontFamily.GenericSansSerif, blockHeight * 0.26f, FontStyle.Bold, GraphicsUnit.Pixel);
 
         // Both scores get the same width so the block does not jump about when
         // a single digit becomes two.
@@ -115,7 +130,7 @@ public sealed class BannerForm : Form
             g.MeasureString(_state.AwayScore.ToString(), numberFont).Width);
         numberWidth = Math.Max(numberWidth, g.MeasureString("0", numberFont).Width * 1.2f);
 
-        var race = _state.Race is int target ? $"({target})" : string.Empty;
+        var race = Race(_state.HomeTarget, _state.AwayTarget);
         var raceWidth = race.Length > 0 ? g.MeasureString(race, raceFont).Width : 0f;
 
         // bar | score | (race) | score | bar
@@ -132,30 +147,45 @@ public sealed class BannerForm : Form
             g.FillPath(brush, path);
         }
 
+        // Laid out first, drawn second: the race has to be placed against where
+        // the two scores actually end up, not where its own slot happens to be.
         var x = blockLeft + pad;
-
-        DrawBar(g, new RectangleF(x, centre - barHeight / 2f, barWidth, barHeight),
-                _state.HomeScore, _state.HomeTarget, _state.HomeOnHill || _state.HomeWon);
+        var homeBar = x;
         x += barWidth + gap;
 
-        DrawNumber(g, _state.HomeScore, numberFont, x, numberWidth, centre,
-                   _state.HomeOnHill || _state.HomeWon);
+        var homeLeft = x;
         x += numberWidth + gap;
+
+        if (race.Length > 0) x += raceWidth + gap;
+
+        var awayLeft = x;
+        x += numberWidth + gap;
+        var awayBar = x;
+
+        DrawBar(g, new RectangleF(homeBar, centre - barHeight / 2f, barWidth, barHeight),
+                _state.HomeScore, _state.HomeTarget, _state.HomeOnHill || _state.HomeWon);
+
+        DrawNumber(g, _state.HomeScore, numberFont, homeLeft, numberWidth, centre,
+                   _state.HomeOnHill || _state.HomeWon);
+
+        DrawNumber(g, _state.AwayScore, numberFont, awayLeft, numberWidth, centre,
+                   _state.AwayOnHill || _state.AwayWon);
+
+        DrawBar(g, new RectangleF(awayBar, centre - barHeight / 2f, barWidth, barHeight),
+                _state.AwayScore, _state.AwayTarget, _state.AwayOnHill || _state.AwayWon);
 
         if (race.Length > 0)
         {
+            // Dead centre of the gap between the two scores, and on their middle
+            // line rather than their baseline - the brackets reach below the
+            // line themselves, so matching baselines leaves the smaller text
+            // looking like it has slipped.
             var size = g.MeasureString(race, raceFont);
+            var middle = (homeLeft + numberWidth + awayLeft) / 2f;
+
             using var muted = new SolidBrush(Muted);
-            g.DrawString(race, raceFont, muted, x, centre - size.Height / 2f);
-            x += raceWidth + gap;
+            g.DrawString(race, raceFont, muted, middle - size.Width / 2f, centre - size.Height / 2f);
         }
-
-        DrawNumber(g, _state.AwayScore, numberFont, x, numberWidth, centre,
-                   _state.AwayOnHill || _state.AwayWon);
-        x += numberWidth + gap;
-
-        DrawBar(g, new RectangleF(x, centre - barHeight / 2f, barWidth, barHeight),
-                _state.AwayScore, _state.AwayTarget, _state.AwayOnHill || _state.AwayWon);
 
         // Names take whatever is left either side of the block, less a margin
         // so a long one does not run right up to the edge of the capture.
@@ -170,6 +200,17 @@ public sealed class BannerForm : Form
 
         DrawName(g, _state.AwayNames, nameSize, nameBox, blockLeft + blockWidth + gap, centre,
                  rightAligned: false, breaking: _state.Breaking == Side.Away, dot, dotSpace);
+    }
+
+    /// <summary>
+    /// The race, as it sits between the two scores. One number while both sides
+    /// are chasing the same total; on a handicap they are chasing different
+    /// ones, so both are shown - home first, the way the scores read.
+    /// </summary>
+    private static string Race(int home, int away)
+    {
+        if (home < 1 || away < 1) return string.Empty;
+        return home == away ? $"({home})" : $"({home}/{away})";
     }
 
     private static void DrawNumber(Graphics g, int score, Font font, float left, float width, float centre, bool lit)
