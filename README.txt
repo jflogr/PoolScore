@@ -88,8 +88,8 @@ TWO WAYS TO RUN IT
    "Banner" opens a separate fixed-size window with just the score line in it -
    that is the one to point OBS at (see STREAMING below).
 
-   It serves the phone view itself, so phones on the same wifi can watch and
-   nudge the score without anything else running.
+   It serves the phone view itself, so phones on the same wifi can watch -
+   and score, once you allow them - without anything else running.
 
    Players and scores are remembered between runs in one file:
      %LOCALAPPDATA%\PoolScore\session.json
@@ -140,17 +140,24 @@ address it prints (http://localhost:4174), and install from the browser menu.
 -------------------------------------------------------------------
 PHONES (same wifi)
 -------------------------------------------------------------------
-WINDOWS APP - watching, plus the score
+WINDOWS APP - anyone can watch, you choose who scores
 - Nothing to start. The app serves the phone view itself, on port 4174.
-- Scan the QR code on the Match settings tab, or type the address printed
-  above it.
-- Phones get the live score, the leaderboard and the full schedule, with a
-  minus and a plus beside each side's score. That is all a phone can change:
-  not the format, the players, finishing the set or undo - so nobody can break
-  the setup mid-game. Finishing a set is still done at the PC.
+- Scan the QR code down the right of the window, or type the address printed
+  under it.
+- Every phone gets the live score, the leaderboard and the full schedule.
+- To score, a phone types a name and taps "Ask to score". A bar appears under
+  the scoreboard on the PC - "Dave wants to score" - with Allow and Deny. It
+  never covers the score or takes focus, and the OBS banner never shows it.
+  Several asks at once queue up and are answered one at a time.
+- An allowed phone gets a minus and a plus beside each side's score. That is
+  all it can change: not the format, the players, finishing the set or undo -
+  so nobody can break the setup mid-game. Finishing a set is done at the PC.
+- Allowed phones are listed under "Scoring" below the QR code. The cross next
+  to one stops it scoring at once; it can ask again.
+- Approvals last until the app closes, so every match night starts with only
+  the PC scoring. A phone that was allowed last time has to ask again.
 - A tap is tied to the set that was on the phone's screen. If the set has moved
   on by the time it arrives, it is dropped rather than scored into the next one.
-- Anyone on the wifi who opens the page can use the buttons.
 - The first run raises a Windows firewall prompt, because the app has to accept
   connections from the wifi. Tick BOTH private and public networks. A laptop
   that has never been told the house wifi is trusted counts it as public, so

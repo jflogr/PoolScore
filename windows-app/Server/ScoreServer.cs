@@ -18,9 +18,11 @@ namespace PoolScoreTracker.Server;
 public sealed record PhoneTap(string Game, Side Side, int Delta);
 
 /// <summary>
-/// Serves the phone view to phones on the same wifi. Phones can nudge the
-/// current score up or down by one rack and nothing else - no format, players,
-/// finishing a set or undo - so a phone cannot break the setup mid-game.
+/// Serves the phone view to phones on the same wifi. Every phone can watch.
+/// A phone can also ask to score, and once somebody at the PC allows it, it
+/// can nudge the current score up or down by one rack - and nothing else: no
+/// format, players, finishing a set or undo, so the setup stays safe.
+/// <see cref="Phones"/> keeps track of who is allowed.
 ///
 /// The live session belongs to the UI thread and is never touched from here.
 /// The window hands over a finished <see cref="Snapshot"/> whenever something
@@ -34,8 +36,11 @@ public sealed class ScoreServer : IAsyncDisposable
 
     private static readonly JsonSerializerOptions Json = new(JsonSerializerDefaults.Web);
 
+    /// <summary>One open event stream, and the key of the phone on the end of it, if it gave one.</summary>
+    private sealed record Listener(Channel<string> Channel, string? Key);
+
     private readonly Lock _gate = new();
-    private readonly List<Channel<string>> _listeners = [];
+    private readonly List<Listener> _listeners = [];
 
     private WebApplication? _app;
     private volatile string _payload = JsonSerializer.Serialize(Snapshot.Waiting, Json);
@@ -47,6 +52,27 @@ public sealed class ScoreServer : IAsyncDisposable
     public IReadOnlyList<string> Addresses { get; private set; } = [];
 
     public bool Running => _app is not null;
+
+    /// <summary>Which phones may score. Lives as long as the app does.</summary>
+    public PhoneAccess Phones { get; } = new();
+
+    public ScoreServer()
+    {
+        // Tell the phone concerned straight away, rather than leaving it to
+        // find out on its next tap.
+        Phones.StatusChanged += (_, change) =>
+        {
+            var frame = Frame("access", Access(change.Status));
+
+            lock (_gate)
+            {
+                foreach (var listener in _listeners.Where(item => item.Key == change.Key))
+                {
+                    listener.Channel.Writer.TryWrite(frame);
+                }
+            }
+        };
+    }
 
     /// <summary>
     /// Raised when the addresses a phone could use have changed - a laptop that
@@ -76,6 +102,9 @@ public sealed class ScoreServer : IAsyncDisposable
             app.MapGet("/", () => Results.Content(Page(), "text/html; charset=utf-8"));
             app.MapGet("/api/state", () => Results.Content(_payload, "application/json"));
             app.MapGet("/api/events", Events);
+            app.MapGet("/api/access", (HttpContext context) =>
+                Results.Content(Access(Phones.StatusOf(context.Request.Query["key"])), "application/json"));
+            app.MapPost("/api/ask", Ask);
             app.MapPost("/api/tap", Tap);
 
             // Anything else is the page again, so a stray path still works - but
@@ -117,7 +146,7 @@ public sealed class ScoreServer : IAsyncDisposable
 
         lock (_gate)
         {
-            foreach (var listener in _listeners) listener.Writer.TryComplete();
+            foreach (var listener in _listeners) listener.Channel.Writer.TryComplete();
             _listeners.Clear();
         }
 
@@ -135,14 +164,40 @@ public sealed class ScoreServer : IAsyncDisposable
         var payload = JsonSerializer.Serialize(snapshot with { Rev = ++_rev }, Json);
         _payload = payload;
 
+        var frame = Frame("state", payload);
+
         lock (_gate)
         {
-            foreach (var listener in _listeners) listener.Writer.TryWrite(payload);
+            foreach (var listener in _listeners) listener.Channel.Writer.TryWrite(frame);
         }
     }
 
     /// <summary>
-    /// One rack up or down for one side. Answered as soon as it is handed on:
+    /// A phone asking to score. Files it for the PC to allow or turn down;
+    /// the phone hears the answer on its event stream.
+    /// </summary>
+    private async Task<IResult> Ask(HttpContext context)
+    {
+        AskRequest? request;
+        try
+        {
+            request = await context.Request.ReadFromJsonAsync<AskRequest>(Json, context.RequestAborted);
+        }
+        catch (Exception)
+        {
+            return Results.BadRequest();
+        }
+
+        if (request is null || !PhoneAccess.IsKey(request.Key)) return Results.BadRequest();
+
+        return Results.Content(Access(Phones.Ask(request.Key!, request.Name)), "application/json");
+    }
+
+    private sealed record AskRequest(string? Key, string? Name);
+
+    /// <summary>
+    /// One rack up or down for one side, from a phone the PC has allowed.
+    /// Answered as soon as it is handed on:
     /// the phone learns the result the same way it learns everything else,
     /// from the next snapshot on the event stream.
     /// </summary>
@@ -161,6 +216,9 @@ public sealed class ScoreServer : IAsyncDisposable
         if (request is null || string.IsNullOrEmpty(request.Game)) return Results.BadRequest();
         if (request.Delta is not (1 or -1)) return Results.BadRequest();
 
+        // Watching is open to anyone who scans the code; scoring is not.
+        if (!Phones.IsApproved(request.Key)) return Results.StatusCode(StatusCodes.Status403Forbidden);
+
         Side side;
         if (request.Side == "home") side = Side.Home;
         else if (request.Side == "away") side = Side.Away;
@@ -170,7 +228,7 @@ public sealed class ScoreServer : IAsyncDisposable
         return Results.Accepted();
     }
 
-    private sealed record TapRequest(string? Game, string? Side, int Delta);
+    private sealed record TapRequest(string? Key, string? Game, string? Side, int Delta);
 
     private async Task Events(HttpContext context)
     {
@@ -184,11 +242,19 @@ public sealed class ScoreServer : IAsyncDisposable
             SingleReader = true
         });
 
-        lock (_gate) _listeners.Add(channel);
+        string? key = context.Request.Query["key"];
+        if (!PhoneAccess.IsKey(key)) key = null;
+
+        var listener = new Listener(channel, key);
+        lock (_gate) _listeners.Add(listener);
 
         try
         {
-            await Write(context, _payload);
+            await Write(context, Frame("state", _payload));
+
+            // A phone that reconnects - after dozing, or after the app was
+            // restarted and forgot every approval - learns where it stands.
+            if (key is not null) await Write(context, Frame("access", Access(Phones.StatusOf(key))));
 
             // A comment every so often keeps the connection alive through a
             // phone dozing off or a router with an idle timeout.
@@ -218,13 +284,17 @@ public sealed class ScoreServer : IAsyncDisposable
         }
         finally
         {
-            lock (_gate) _listeners.Remove(channel);
+            lock (_gate) _listeners.Remove(listener);
         }
     }
 
-    private static async Task Write(HttpContext context, string payload)
+    private static string Frame(string name, string payload) => $"event: {name}\ndata: {payload}\n\n";
+
+    private static string Access(string status) => JsonSerializer.Serialize(new { status }, Json);
+
+    private static async Task Write(HttpContext context, string frame)
     {
-        await context.Response.WriteAsync($"event: state\ndata: {payload}\n\n", context.RequestAborted);
+        await context.Response.WriteAsync(frame, context.RequestAborted);
         await context.Response.Body.FlushAsync(context.RequestAborted);
     }
 

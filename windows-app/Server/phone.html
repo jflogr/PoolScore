@@ -78,6 +78,24 @@
   .adjust button:disabled { opacity: 0.3; }
   .viewonly .adjust button { display: none; }
 
+  /* ---- asking to score ---- */
+  .access { padding: 12px 16px 14px; background: var(--ink); border-top: 1px solid var(--line); }
+  .access form { display: flex; gap: 8px; margin: 0; }
+  .access form[hidden] { display: none; }
+  .access input {
+    flex: 1; min-width: 0; height: 44px; padding: 0 12px; border-radius: 10px;
+    border: 1px solid var(--line); background: var(--deep); color: var(--paper); font: inherit;
+  }
+  .access input::placeholder { color: var(--muted); }
+  .access button {
+    height: 44px; padding: 0 16px; border-radius: 10px; border: 0; flex: none;
+    background: var(--gold); color: var(--deep); font: 700 1rem system-ui, sans-serif;
+    touch-action: manipulation;
+  }
+  .access p { margin: 0; color: var(--muted); font-size: 0.9rem; }
+  .access form + p:not(:empty) { margin-top: 8px; }
+  .access p.good { color: var(--paper); }
+
   footer { padding: 14px 16px 24px; color: var(--muted); font-size: 0.78rem; }
   .offline { color: var(--gold); }
 </style>
@@ -110,6 +128,14 @@
         <button type="button" class="plus" id="awayPlus" aria-label="Add a rack">+</button>
       </div>
     </div>
+  </div>
+
+  <div class="access">
+    <form id="askForm">
+      <input id="askName" maxlength="24" autocomplete="nickname" placeholder="Your name" aria-label="Your name">
+      <button type="submit">Ask to score</button>
+    </form>
+    <p id="accessNote"></p>
   </div>
 
   <section id="leaderSection" hidden>
@@ -155,6 +181,91 @@
   let game = "-";
   let canScore = false;
 
+  // ---- who this phone is ------------------------------------------------
+  // A random key made here and kept in this browser. Asking to score sends
+  // it to the PC; once allowed there, taps carrying it count. getRandomValues
+  // rather than randomUUID, which browsers only offer on https.
+  function makeKey() {
+    const bytes = new Uint8Array(16);
+    crypto.getRandomValues(bytes);
+    return Array.from(bytes, (b) => b.toString(16).padStart(2, "0")).join("");
+  }
+
+  const store = {
+    get(name) { try { return localStorage.getItem(name); } catch { return null; } },
+    set(name, value) { try { localStorage.setItem(name, value); } catch { /* private mode */ } }
+  };
+
+  let key = store.get("poolscore-key");
+  if (!/^[0-9a-f]{32}$/.test(key || "")) {
+    key = makeKey();
+    store.set("poolscore-key", key);
+  }
+
+  $("askName").value = store.get("poolscore-name") || "";
+
+  // none, pending, approved - what the PC says - plus denied, revoked and
+  // busy, which are only ever news and settle back to asking again.
+  let access = "none";
+  let poll = 0;
+
+  const notes = {
+    none: "",
+    pending: "Waiting for the scorer to allow this phone\u2026",
+    approved: "This phone can score.",
+    denied: "The scorer said no.",
+    revoked: "Scoring was turned off for this phone.",
+    busy: "Too many phones are waiting \u2014 try again in a moment."
+  };
+
+  function setAccess(status) {
+    // After a no, the PC just forgets the phone, so its next word is "none".
+    // Keep the news on screen rather than wiping it straight away.
+    if (status === "none" && (access === "denied" || access === "revoked" || access === "busy")) return;
+    if (!(status in notes)) return;
+
+    access = status;
+    $("askForm").hidden = status === "pending" || status === "approved";
+    $("accessNote").textContent = notes[status];
+    $("accessNote").classList.toggle("good", status === "approved");
+    showButtons();
+
+    // The answer normally arrives on the event stream. Checking now and then
+    // while waiting covers an answer lost to a dropped connection.
+    clearInterval(poll);
+    if (status === "pending") poll = setInterval(checkAccess, 4000);
+  }
+
+  function checkAccess() {
+    fetch("api/access?key=" + key, { cache: "no-store" })
+      .then((response) => response.json())
+      .then((answer) => setAccess(answer.status))
+      .catch(() => {});
+  }
+
+  function showButtons() {
+    const live = access === "approved" && canScore;
+    $("score").classList.toggle("viewonly", !live);
+  }
+
+  $("askForm").addEventListener("submit", (event) => {
+    event.preventDefault();
+    const name = $("askName").value.trim();
+    store.set("poolscore-name", name);
+    access = "none"; // asking again clears any earlier no
+
+    fetch("api/ask", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ key, name })
+    })
+      .then((response) => { if (!response.ok) throw new Error(); return response.json(); })
+      .then((answer) => setAccess(answer.status))
+      .catch(() => {
+        $("accessNote").textContent = "Could not reach the scorer.";
+      });
+  });
+
   function side(prefix, list, score, target, breaking) {
     const won = score >= target;
     const onHill = !won && score === target - 1;
@@ -172,13 +283,17 @@
   // moved on is dropped rather than scored into the next one. The new score
   // comes back on the event stream like any other change.
   function tap(sideName, delta) {
-    if (!canScore) return;
+    if (!canScore || access !== "approved") return;
     fetch("api/tap", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ game, side: sideName, delta })
+      body: JSON.stringify({ key, game, side: sideName, delta })
     })
-      .then((response) => { if (!response.ok) throw new Error(); })
+      .then((response) => {
+        // Taken away at the PC, or the app was restarted and forgot us.
+        if (response.status === 403) { setAccess("revoked"); return; }
+        if (!response.ok) throw new Error();
+      })
       .catch(() => {
         $("status").textContent = "That tap did not reach the scorer.";
         $("status").classList.add("offline");
@@ -195,7 +310,7 @@
 
     game = state.game || "-";
     canScore = !!state.canScore;
-    $("score").classList.toggle("viewonly", !canScore);
+    showButtons();
 
     const s = state.score;
     side("home", s.home, s.homeScore, s.homeTarget, s.breaking === "home");
@@ -251,7 +366,11 @@
   }
 
   function watch() {
-    const source = new EventSource("api/events");
+    const source = new EventSource("api/events?key=" + key);
+
+    source.addEventListener("access", (event) => {
+      setAccess(JSON.parse(event.data).status);
+    });
 
     source.addEventListener("state", (event) => {
       $("status").textContent = "Watching live.";

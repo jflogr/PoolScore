@@ -68,6 +68,51 @@ public sealed class MainWindow : Form
     private readonly System.Windows.Forms.Timer _save = new() { Interval = 1200 };
 
     private readonly ScoreServer _server = new();
+
+    // A phone asking to score shows up in a bar between the scoreboard and
+    // the tabs - in view, but never over the score and never taking focus.
+    private readonly Panel _askBar = new()
+    {
+        Dock = DockStyle.Top,
+        Height = TouchHeight + 12,
+        BackColor = ColorTranslator.FromHtml("#fbf0d9"),
+        Padding = new Padding(12, 6, 8, 6),
+        Visible = false
+    };
+
+    private readonly Label _askLabel = new()
+    {
+        Dock = DockStyle.Fill,
+        TextAlign = ContentAlignment.MiddleLeft,
+        AutoEllipsis = true,
+        ForeColor = Ink,
+        Font = new Font(FontFamily.GenericSansSerif, 11.5f)
+    };
+
+    private int? _askingId;
+
+    private readonly ToolTip _tips = new();
+
+    // Phones allowed to score, under the code down the right.
+    private readonly Label _scorersHeading = new()
+    {
+        Text = "Scoring",
+        Dock = DockStyle.Top,
+        AutoSize = true,
+        Font = new Font(FontFamily.GenericSansSerif, 10f, FontStyle.Bold),
+        ForeColor = Ink,
+        Padding = new Padding(0, 14, 0, 2),
+        Visible = false
+    };
+
+    private readonly FlowLayoutPanel _scorers = new()
+    {
+        Dock = DockStyle.Top,
+        FlowDirection = FlowDirection.TopDown,
+        WrapContents = false,
+        AutoSize = true,
+        AutoSizeMode = AutoSizeMode.GrowAndShrink
+    };
     private readonly List<ComboBox> _slots = [];
 
     private TabPage _settingsPage = null!;
@@ -104,6 +149,7 @@ public sealed class MainWindow : Form
         // filling the rest.
         Controls.Add(_tabs);
         Controls.Add(BuildPhoneStrip());
+        Controls.Add(BuildAskBar());
         Controls.Add(_scoring);
         Controls.Add(_commands);
 
@@ -125,9 +171,16 @@ public sealed class MainWindow : Form
             _save.Start();
         };
 
-        // A phone's plus or minus arrives on a request thread. It is handed to
-        // the UI thread and applied there like a keypress - unless the game it
-        // was aimed at is no longer the one being scored.
+        _server.Phones.Changed += (_, _) =>
+        {
+            if (IsDisposed || Disposing || !IsHandleCreated) return;
+            BeginInvoke(SyncPhones);
+        };
+
+        // A phone's plus or minus arrives on a request thread, and only from a
+        // phone allowed here. It is handed to the UI thread and applied there
+        // like a keypress - unless the game it was aimed at is no longer the
+        // one being scored.
         _server.Tapped += (_, tap) =>
         {
             if (IsDisposed || Disposing || !IsHandleCreated) return;
@@ -328,11 +381,119 @@ public sealed class MainWindow : Form
         heading.Dock = DockStyle.Top;
         heading.Margin = Padding.Empty;
 
-        // Added bottom-up: heading, then code, then the address under it.
+        // Added bottom-up: heading, then code, then the address under it, then
+        // whichever phones are allowed to score.
+        strip.Controls.Add(_scorers);
+        strip.Controls.Add(_scorersHeading);
         strip.Controls.Add(_phoneLabel);
         strip.Controls.Add(_qrView);
         strip.Controls.Add(heading);
         return strip;
+    }
+
+    private Control BuildAskBar()
+    {
+        var allow = BarButton("Allow", ColorTranslator.FromHtml("#2f7d4a"), Color.White);
+        var deny = BarButton("Deny", Color.White, Ink);
+
+        allow.Click += (_, _) => { if (_askingId is { } id) _server.Phones.Approve(id); };
+        deny.Click += (_, _) => { if (_askingId is { } id) _server.Phones.Deny(id); };
+
+        // Docked right-to-left, so Allow ends up nearest the text.
+        _askBar.Controls.Add(_askLabel);
+        _askBar.Controls.Add(allow);
+        _askBar.Controls.Add(new Panel { Dock = DockStyle.Right, Width = 8 });
+        _askBar.Controls.Add(deny);
+        return _askBar;
+    }
+
+    /// <summary>
+    /// Never a tab stop, so a click on one does not leave it holding focus
+    /// for the next Space or Enter meant for something else.
+    /// </summary>
+    private static Button BarButton(string text, Color back, Color fore)
+    {
+        var button = new Button
+        {
+            Text = text,
+            Dock = DockStyle.Right,
+            Width = 96,
+            TabStop = false,
+            FlatStyle = FlatStyle.Flat,
+            BackColor = back,
+            ForeColor = fore,
+            Font = new Font(FontFamily.GenericSansSerif, 11f, FontStyle.Bold)
+        };
+
+        button.FlatAppearance.BorderColor = ColorTranslator.FromHtml("#c9b27d");
+        return button;
+    }
+
+    /// <summary>
+    /// Brings the ask bar and the list of scoring phones up to date. Asks are
+    /// answered one at a time, oldest first, with a count of any waiting
+    /// behind.
+    /// </summary>
+    private void SyncPhones()
+    {
+        var phones = _server.Phones.List();
+        var waiting = phones.Where(phone => phone.Status == PhoneStatus.Pending).ToList();
+
+        if (waiting.FirstOrDefault() is { } first)
+        {
+            _askingId = first.Id;
+            _askLabel.Text = waiting.Count > 1
+                ? $"{first.Name} wants to score  (+{waiting.Count - 1} more waiting)"
+                : $"{first.Name} wants to score";
+            _askBar.Visible = true;
+        }
+        else
+        {
+            _askingId = null;
+            _askBar.Visible = false;
+        }
+
+        var allowed = phones.Where(phone => phone.Status == PhoneStatus.Approved).ToList();
+
+        _scorers.SuspendLayout();
+        foreach (Control old in _scorers.Controls.Cast<Control>().ToList()) old.Dispose();
+
+        foreach (var phone in allowed)
+        {
+            var row = new Panel { Width = QrSize + 4, Height = 30, Margin = new Padding(0, 2, 0, 0) };
+
+            var name = new Label
+            {
+                Text = phone.Name,
+                Dock = DockStyle.Fill,
+                TextAlign = ContentAlignment.MiddleLeft,
+                AutoEllipsis = true,
+                ForeColor = Ink,
+                Font = new Font(FontFamily.GenericSansSerif, 9.5f)
+            };
+
+            var remove = new Button
+            {
+                Text = "\u2715",
+                Dock = DockStyle.Right,
+                Width = 30,
+                TabStop = false,
+                FlatStyle = FlatStyle.Flat,
+                ForeColor = ColorTranslator.FromHtml("#5b6b7d")
+            };
+            remove.FlatAppearance.BorderSize = 0;
+
+            var id = phone.Id;
+            remove.Click += (_, _) => _server.Phones.Revoke(id);
+            _tips.SetToolTip(remove, "Stop this phone scoring");
+
+            row.Controls.Add(name);
+            row.Controls.Add(remove);
+            _scorers.Controls.Add(row);
+        }
+
+        _scorersHeading.Visible = allowed.Count > 0;
+        _scorers.ResumeLayout();
     }
 
     private static ToolStripButton Command(string text, string iconPath, int iconSize, Action onClick) =>
