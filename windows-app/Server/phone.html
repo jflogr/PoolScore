@@ -92,6 +92,7 @@
     background: var(--gold); color: var(--deep); font: 700 1rem system-ui, sans-serif;
     touch-action: manipulation;
   }
+  .access button:disabled { opacity: 0.4; }
   .access p { margin: 0; color: var(--muted); font-size: 0.9rem; }
   .access form + p:not(:empty) { margin-top: 8px; }
   .access p.good { color: var(--paper); }
@@ -133,7 +134,7 @@
   <div class="access">
     <form id="askForm">
       <input id="askName" maxlength="24" autocomplete="nickname" placeholder="Your name" aria-label="Your name">
-      <button type="submit">Ask to score</button>
+      <button type="submit" id="askButton" disabled>Ask to score</button>
     </form>
     <p id="accessNote"></p>
   </div>
@@ -204,6 +205,12 @@
 
   $("askName").value = store.get("poolscore-name") || "";
 
+  // The PC needs a name to know who is asking, so no name, no asking.
+  function nameGiven() { return $("askName").value.trim() !== ""; }
+  function syncAskButton() { $("askButton").disabled = !nameGiven(); }
+  $("askName").addEventListener("input", syncAskButton);
+  syncAskButton();
+
   // none, pending, approved - what the PC says - plus denied, revoked and
   // busy, which are only ever news and settle back to asking again.
   let access = "none";
@@ -250,6 +257,7 @@
 
   $("askForm").addEventListener("submit", (event) => {
     event.preventDefault();
+    if (!nameGiven()) return; // Enter on the keyboard skips the disabled button
     const name = $("askName").value.trim();
     store.set("poolscore-name", name);
     access = "none"; // asking again clears any earlier no
