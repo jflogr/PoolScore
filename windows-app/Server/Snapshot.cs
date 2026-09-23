@@ -13,6 +13,23 @@ public sealed record ScoreLine(
 
 public sealed record LeaderLine(string Name, int Wins, int Played, int Possible);
 
+public sealed record SlotLine(string Label, string? Player);
+
+public sealed record PlayerLine(string Id, string Name);
+
+/// <summary>
+/// What an allowed phone can change in a one-off match: each side's race, who
+/// is in each slot, and who is on the roster to pick from. Round robins have
+/// none - their setup is a whole evening's schedule and stays at the PC.
+/// </summary>
+public sealed record SetupLine(
+    int HomeTarget,
+    int AwayTarget,
+    int MinTarget,
+    int MaxTarget,
+    SlotLine[] Slots,
+    PlayerLine[] Players);
+
 public sealed record UpcomingLine(
     int Set,
     int Round,
@@ -40,11 +57,12 @@ public sealed record Snapshot(
     bool CanScore,
     ScoreLine Score,
     LeaderLine[] Leaders,
-    UpcomingLine[] Upcoming)
+    UpcomingLine[] Upcoming,
+    SetupLine? Setup)
 {
     public static readonly Snapshot Waiting = new(
         0, "-", "Waiting for the scorer", "-", false,
-        new ScoreLine([], [], 0, 0, 1, 1, null), [], []);
+        new ScoreLine([], [], 0, 0, 1, 1, null), [], [], null);
 
     /// <summary>
     /// Which game is being scored: the set in a round robin, the mode in a
@@ -78,7 +96,18 @@ public sealed record Snapshot(
         return new Snapshot(
             rev, session.Config.Key, BuildHeading(session),
             game, game != "-",
-            score, leaders, BuildUpcoming(session));
+            score, leaders, BuildUpcoming(session), BuildSetup(session));
+    }
+
+    private static SetupLine? BuildSetup(Session session)
+    {
+        if (session.IsRoundRobin) return null;
+
+        return new SetupLine(
+            session.Match.TargetHome, session.Match.TargetAway,
+            Session.MinTarget, Session.MaxTarget,
+            [.. session.Current.Lineup.Select((id, slot) => new SlotLine(session.SlotLabel(slot), id))],
+            [.. session.Roster.Select(player => new PlayerLine(player.Id, player.Name))]);
     }
 
     private static string BuildHeading(Session session)

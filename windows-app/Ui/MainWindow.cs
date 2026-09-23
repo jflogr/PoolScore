@@ -38,6 +38,7 @@ public sealed class MainWindow : Form
     private readonly ListView _matches = NewList();
 
     private ToolStripButton _undo = null!;
+    private ToolStripButton _reset = null!;
 
     private PlayersDialog? _players;
 
@@ -192,6 +193,37 @@ public sealed class MainWindow : Form
             });
         };
 
+        // The race, a player or clearing the scores, from an allowed phone -
+        // one-off matches only. Checked against the live session here, so a
+        // change aimed at a match that has since become a round robin is
+        // dropped, as is a player who has since left the roster.
+        _server.SetupRequested += (_, change) =>
+        {
+            if (IsDisposed || Disposing || !IsHandleCreated) return;
+
+            BeginInvoke(() =>
+            {
+                if (_session.IsRoundRobin || Snapshot.GameFor(_session) != change.Game) return;
+
+                switch (change.Change)
+                {
+                    case SetupChange.Race:
+                        _session.SetTarget(change.Side, change.Value);
+                        break;
+
+                    case SetupChange.Slot:
+                        if (change.Value >= _session.Current.Lineup.Count) return;
+                        if (change.Player is not null && _session.Roster.All(player => player.Id != change.Player)) return;
+                        _session.SetLineupSlot(change.Value, change.Player);
+                        break;
+
+                    case SetupChange.Clear:
+                        _session.ResetScores();
+                        break;
+                }
+            });
+        };
+
         Sync();
     }
 
@@ -338,7 +370,8 @@ public sealed class MainWindow : Form
 
         _commands.Items.Add(Command("Players", Icons.Group, icon, ShowPlayers));
         _commands.Items.Add(Command("Swap break", Icons.SwapHoriz, icon, _session.SwapBreak));
-        _commands.Items.Add(Command("Reset", Icons.RestartAlt, icon, ResetScores));
+        _reset = Command("Reset", Icons.RestartAlt, icon, ResetScores);
+        _commands.Items.Add(_reset);
         _commands.Items.Add(_undo);
 
         // Off on its own at the far end: it opens a window rather than
@@ -649,8 +682,12 @@ public sealed class MainWindow : Form
     /// </summary>
     private void ResetScores()
     {
+        var question = _session.IsRoundRobin
+            ? $"Reset all {_session.Config.Label} scores?\n\nPlayers and the line-up are kept."
+            : "Clear the scores back to 0 - 0?\n\nThe players and the race are kept.";
+
         var answer = MessageBox.Show(this,
-            $"Reset all {_session.Config.Label} scores?\n\nPlayers and the line-up are kept.",
+            question,
             "Pool Score", MessageBoxButtons.YesNo, MessageBoxIcon.Warning,
             MessageBoxDefaultButton.Button2);
 
@@ -695,6 +732,10 @@ public sealed class MainWindow : Form
         // The centre button only appears once a side has won, so it can say
         // what actually happens next rather than "commit".
         _scoring.ActionText = roundRobin ? "Next match" : "New match";
+
+        // A round robin's reset starts the whole evening again; a one-off
+        // match only has the one score to clear, so say that.
+        _reset.Text = roundRobin ? "Reset" : "Clear scores";
     }
 
     /// <summary>

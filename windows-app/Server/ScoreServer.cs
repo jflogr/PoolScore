@@ -17,12 +17,32 @@ namespace PoolScoreTracker.Server;
 /// <summary>A phone asking for one rack to be added to or taken off a side.</summary>
 public sealed record PhoneTap(string Game, Side Side, int Delta);
 
+public enum SetupChange
+{
+    /// <summary>One side's race, set to <see cref="PhoneSetup.Value"/>.</summary>
+    Race,
+
+    /// <summary>Line-up slot <see cref="PhoneSetup.Value"/> given to <see cref="PhoneSetup.Player"/>, or emptied.</summary>
+    Slot,
+
+    /// <summary>Both scores back to nil-nil.</summary>
+    Clear
+}
+
+/// <summary>
+/// A phone changing a one-off match's setup. Only checked for shape here: the
+/// window decides whether it still applies, against the live session.
+/// </summary>
+public sealed record PhoneSetup(string Game, SetupChange Change, Side Side, int Value, string? Player);
+
 /// <summary>
 /// Serves the phone view to phones on the same wifi. Every phone can watch.
 /// A phone can also ask to score, and once somebody at the PC allows it, it
-/// can nudge the current score up or down by one rack - and nothing else: no
-/// format, players, finishing a set or undo, so the setup stays safe.
-/// <see cref="Phones"/> keeps track of who is allowed.
+/// can nudge the current score up or down by one rack. In a one-off match it
+/// can also set the race, pick the players and clear the scores. Never the
+/// format, and never a round robin's schedule, finishing a set or undo - so
+/// an evening's setup stays safe. <see cref="Phones"/> keeps track of who is
+/// allowed.
 ///
 /// The live session belongs to the UI thread and is never touched from here.
 /// The window hands over a finished <see cref="Snapshot"/> whenever something
@@ -87,6 +107,12 @@ public sealed class ScoreServer : IAsyncDisposable
     /// </summary>
     public event EventHandler<PhoneTap>? Tapped;
 
+    /// <summary>
+    /// A phone changed the race, a player or cleared the scores. Arrives on a
+    /// request thread, like <see cref="Tapped"/>, and only from allowed phones.
+    /// </summary>
+    public event EventHandler<PhoneSetup>? SetupRequested;
+
     public async Task<bool> StartAsync(int port = 4174)
     {
         if (_app is not null) return true;
@@ -109,6 +135,7 @@ public sealed class ScoreServer : IAsyncDisposable
             // thrown away, leaving every reply an empty 200.
             app.MapPost("/api/ask", (Delegate)Ask);
             app.MapPost("/api/tap", (Delegate)Tap);
+            app.MapPost("/api/setup", (Delegate)Setup);
 
             // Anything else is the page again, so a stray path still works - but
             // only for a read. Left unguarded the fallback answers every verb,
@@ -232,6 +259,52 @@ public sealed class ScoreServer : IAsyncDisposable
     }
 
     private sealed record TapRequest(string? Key, string? Game, string? Side, int Delta);
+
+    /// <summary>
+    /// The race, a player or clearing the scores, from a phone the PC has
+    /// allowed. Like a tap it carries the game it was aimed at, and the result
+    /// comes back on the event stream.
+    /// </summary>
+    private async Task<IResult> Setup(HttpContext context)
+    {
+        SetupRequest? request;
+        try
+        {
+            request = await context.Request.ReadFromJsonAsync<SetupRequest>(Json, context.RequestAborted);
+        }
+        catch (Exception)
+        {
+            return Results.BadRequest();
+        }
+
+        if (request is null || string.IsNullOrEmpty(request.Game)) return Results.BadRequest();
+        if (!Phones.IsApproved(request.Key)) return Results.StatusCode(StatusCodes.Status403Forbidden);
+
+        var side = request.Side == "away" ? Side.Away : Side.Home;
+
+        SetupChange change;
+        switch (request.Change)
+        {
+            case "race":
+                if (request.Side is not ("home" or "away")) return Results.BadRequest();
+                change = SetupChange.Race;
+                break;
+            case "slot":
+                if (request.Value < 0) return Results.BadRequest();
+                change = SetupChange.Slot;
+                break;
+            case "clear":
+                change = SetupChange.Clear;
+                break;
+            default:
+                return Results.BadRequest();
+        }
+
+        SetupRequested?.Invoke(this, new PhoneSetup(request.Game, change, side, request.Value, request.Player));
+        return Results.Accepted();
+    }
+
+    private sealed record SetupRequest(string? Key, string? Game, string? Change, string? Side, int Value, string? Player);
 
     private async Task Events(HttpContext context)
     {

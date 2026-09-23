@@ -97,6 +97,27 @@
   .access form + p:not(:empty) { margin-top: 8px; }
   .access p.good { color: var(--paper); }
 
+  /* ---- match setup: one-off matches, allowed phones only ---- */
+  .setup-row { display: flex; align-items: center; gap: 12px; min-height: 52px; }
+  .setup-row + .setup-row { border-top: 1px solid var(--line); }
+  .setup-row .label { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .setup-row .muted { color: var(--muted); font-size: 0.85rem; }
+  .stepper { display: flex; align-items: center; gap: 6px; flex: none; }
+  .stepper output { min-width: 2ch; text-align: center; font-size: 1.3rem; font-weight: 700; font-variant-numeric: tabular-nums; }
+  .setup button, .setup select {
+    height: 44px; border-radius: 10px; border: 1px solid var(--line);
+    background: var(--ink); color: var(--paper); font: inherit;
+    touch-action: manipulation; -webkit-tap-highlight-color: transparent;
+  }
+  .stepper button { width: 44px; padding: 0; font: 700 1.4rem/1 system-ui, sans-serif; }
+  .setup button:disabled { opacity: 0.3; }
+  .setup button:active:not(:disabled) { background: var(--gold); color: var(--deep); }
+  .setup select { width: 55%; max-width: 220px; padding: 0 10px; flex: none; }
+  .setup .hint { margin: 8px 0 0; color: var(--muted); font-size: 0.82rem; }
+  .setup .clear { width: 100%; font-weight: 700; border-color: #6b5530; color: var(--gold); }
+  h2 + .setup-row { margin-top: -6px; }
+  .setup-group + .setup-group { margin-top: 18px; }
+
   footer { padding: 14px 16px 24px; color: var(--muted); font-size: 0.78rem; }
   .offline { color: var(--gold); }
 </style>
@@ -138,6 +159,38 @@
     </form>
     <p id="accessNote"></p>
   </div>
+
+  <section id="setupSection" class="setup" hidden>
+    <div class="setup-group">
+      <h2>Race</h2>
+      <div class="setup-row">
+        <span class="label" id="homeRaceLabel">Home races to</span>
+        <div class="stepper">
+          <button type="button" id="homeRaceDown" aria-label="Shorter race">&minus;</button>
+          <output id="homeRace">3</output>
+          <button type="button" id="homeRaceUp" aria-label="Longer race">+</button>
+        </div>
+      </div>
+      <div class="setup-row">
+        <span class="label" id="awayRaceLabel">Away races to</span>
+        <div class="stepper">
+          <button type="button" id="awayRaceDown" aria-label="Shorter race">&minus;</button>
+          <output id="awayRace">3</output>
+          <button type="button" id="awayRaceUp" aria-label="Longer race">+</button>
+        </div>
+      </div>
+    </div>
+
+    <div class="setup-group">
+      <h2>Players</h2>
+      <div id="slots"></div>
+      <p class="hint">Changing a player starts the score again from 0 - 0.</p>
+    </div>
+
+    <div class="setup-group">
+      <button type="button" class="clear" id="clearScores">Clear scores</button>
+    </div>
+  </section>
 
   <section id="leaderSection" hidden>
     <h2>Leaderboard</h2>
@@ -253,6 +306,7 @@
   function showButtons() {
     const live = access === "approved" && canScore;
     $("score").classList.toggle("viewonly", !live);
+    $("setupSection").hidden = !(access === "approved" && setup);
   }
 
   $("askForm").addEventListener("submit", (event) => {
@@ -290,12 +344,11 @@
   // Send the game the tap was aimed at, so a tap that lands after the set has
   // moved on is dropped rather than scored into the next one. The new score
   // comes back on the event stream like any other change.
-  function tap(sideName, delta) {
-    if (!canScore || access !== "approved") return;
-    fetch("api/tap", {
+  function send(path, body) {
+    fetch(path, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ key, game, side: sideName, delta })
+      body: JSON.stringify({ key, game, ...body })
     })
       .then((response) => {
         // Taken away at the PC, or the app was restarted and forgot us.
@@ -303,9 +356,95 @@
         if (!response.ok) throw new Error();
       })
       .catch(() => {
-        $("status").textContent = "That tap did not reach the scorer.";
+        $("status").textContent = "That did not reach the scorer.";
         $("status").classList.add("offline");
       });
+  }
+
+  function tap(sideName, delta) {
+    if (!canScore || access !== "approved") return;
+    send("api/tap", { side: sideName, delta });
+  }
+
+  // ---- match setup ------------------------------------------------------
+  // Singles and doubles only: the race, who is playing and clearing the
+  // score. A round robin sends no setup, so none of this shows.
+  let setup = null;
+  let slotsShape = "";
+
+  function change(body) {
+    if (!setup || access !== "approved") return;
+    send("api/setup", body);
+  }
+
+  function race(sideName, delta) {
+    const now = sideName === "home" ? setup.homeTarget : setup.awayTarget;
+    const next = now + delta;
+    if (next < setup.minTarget || next > setup.maxTarget) return;
+    change({ change: "race", side: sideName, value: next });
+  }
+
+  $("homeRaceDown").addEventListener("click", () => race("home", -1));
+  $("homeRaceUp").addEventListener("click", () => race("home", 1));
+  $("awayRaceDown").addEventListener("click", () => race("away", -1));
+  $("awayRaceUp").addEventListener("click", () => race("away", 1));
+
+  $("clearScores").addEventListener("click", () => {
+    if (confirm("Clear the scores back to 0 - 0?\n\nThe players and the race are kept.")) {
+      change({ change: "clear" });
+    }
+  });
+
+  function renderSetup(state) {
+    setup = state.setup || null;
+    showButtons();
+    if (!setup) return;
+
+    const both = (list) => list.join(" & ");
+    const s = state.score;
+    $("homeRaceLabel").textContent = both(s.home) + " races to";
+    $("awayRaceLabel").textContent = both(s.away) + " races to";
+
+    for (const [prefix, target] of [["home", setup.homeTarget], ["away", setup.awayTarget]]) {
+      $(prefix + "Race").textContent = target;
+      $(prefix + "RaceDown").disabled = target <= setup.minTarget;
+      $(prefix + "RaceUp").disabled = target >= setup.maxTarget;
+    }
+
+    // Only rebuild the pickers when the slots or the roster change, so a
+    // score coming in does not close a list someone has open.
+    const shape = JSON.stringify([setup.slots.map((slot) => slot.label), setup.players]);
+    if (shape !== slotsShape) {
+      slotsShape = shape;
+      const slots = $("slots");
+      slots.textContent = "";
+
+      setup.slots.forEach((slot, index) => {
+        const row = document.createElement("label");
+        row.className = "setup-row";
+
+        const label = document.createElement("span");
+        label.className = "label";
+        label.textContent = slot.label;
+
+        const pick = document.createElement("select");
+        pick.dataset.slot = index;
+        pick.append(new Option("—", ""));
+        for (const player of setup.players) pick.append(new Option(player.name, player.id));
+
+        // Picking someone already playing swaps the two, at the PC.
+        pick.addEventListener("change", () => {
+          change({ change: "slot", value: index, player: pick.value || null });
+        });
+
+        row.append(label, pick);
+        slots.append(row);
+      });
+    }
+
+    for (const pick of $("slots").querySelectorAll("select")) {
+      pick.value = setup.slots[pick.dataset.slot].player || "";
+    }
   }
 
   $("homeMinus").addEventListener("click", () => tap("home", -1));
@@ -323,6 +462,8 @@
     const s = state.score;
     side("home", s.home, s.homeScore, s.homeTarget, s.breaking === "home");
     side("away", s.away, s.awayScore, s.awayTarget, s.breaking === "away");
+
+    renderSetup(state);
 
     const leaders = $("leaders");
     leaders.textContent = "";

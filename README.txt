@@ -80,8 +80,10 @@ TWO WAYS TO RUN IT
      B       add a rack to the right side     ALT+B   take one off
 
    A toolbar under that has Commit, Undo last, Swap break, Players, Banner and
-   Reset. Players opens the roster in its own window. Below the toolbar are
-   tabs: Match settings, and - in a round robin only - Matches and Leaderboard.
+   Reset - called Clear scores in singles and doubles, where there is only
+   the one score to clear. Players opens the roster in its own window. Below
+   the toolbar are tabs: Match settings, and - in a round robin only - Matches
+   and Leaderboard.
    A one-off match has no schedule and keeps no table, so those two are simply
    not there.
 
@@ -149,9 +151,14 @@ WINDOWS APP - anyone can watch, you choose who scores
   the scoreboard on the PC - "Dave wants to score" - with Allow and Deny. It
   never covers the score or takes focus, and the OBS banner never shows it.
   Several asks at once queue up and are answered one at a time.
-- An allowed phone gets a minus and a plus beside each side's score. That is
-  all it can change: not the format, the players, finishing the set or undo -
-  so nobody can break the setup mid-game. Finishing a set is done at the PC.
+- An allowed phone gets a minus and a plus beside each side's score.
+- In singles and doubles an allowed phone can also set each side's race, pick
+  the players and clear the scores - there is no schedule or leaderboard to
+  show, so the room is there. Changing a player starts the score from 0 - 0,
+  as it does at the PC.
+- In a round robin the plus and minus are all a phone gets. The format, the
+  line-up, finishing a set and undo stay at the PC, so nobody can break the
+  evening's schedule mid-game.
 - Allowed phones are listed under "Scoring" below the QR code. The cross next
   to one stops it scoring at once; it can ask again.
 - Approvals last until the app closes, so every match night starts with only

@@ -466,7 +466,7 @@ public sealed class Session
     /// </summary>
     public void SetTarget(Side side, int target)
     {
-        var next = Math.Clamp(target, 1, 9);
+        var next = Math.Clamp(target, MinTarget, MaxTarget);
 
         if (IsRoundRobin)
         {
@@ -499,6 +499,9 @@ public sealed class Session
 
         Notify();
     }
+
+    public const int MinTarget = 1;
+    public const int MaxTarget = 9;
 
     public int TargetFor(Side side) =>
         IsRoundRobin ? RoundRobin.Target : side == Side.Home ? Match.TargetHome : Match.TargetAway;
