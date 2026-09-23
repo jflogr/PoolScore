@@ -28,26 +28,30 @@
   header { padding: 14px 16px 10px; }
   h1 { margin: 0; font-size: 0.8rem; font-weight: 600; letter-spacing: 0.06em; text-transform: uppercase; color: var(--muted); }
 
+  /* ---- two columns: side A on the left, side B on the right ---- */
+  .cols { display: grid; grid-template-columns: 1fr 1fr; }
+  .cols > .col + .col { border-left: 1px solid var(--line); }
+  .col { min-width: 0; }
+
   /* ---- the score itself, the reason anyone opens this ---- */
-  .score { background: var(--ink); padding: 18px 16px 20px; }
+  .score { background: var(--ink); }
+  .score .col { padding: 16px 14px 18px; display: flex; flex-direction: column; align-items: center; text-align: center; }
 
-  .side { display: flex; align-items: center; gap: 12px; }
-  .side + .side { margin-top: 14px; }
+  .names { max-width: 100%; display: flex; align-items: center; gap: 6px; font-size: 1.2rem; font-weight: 700; line-height: 1.15; }
+  .names .stack { min-width: 0; }
+  .names span { display: block; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 
-  .names { flex: 1; min-width: 0; font-size: 1.35rem; font-weight: 700; line-height: 1.15; }
-  .names span { display: block; }
+  .tally { margin: 6px 0 10px; font-size: 3.6rem; font-weight: 800; line-height: 1.05; font-variant-numeric: tabular-nums; }
+  .lit .tally, .lit .names { color: var(--gold); }
 
-  .tally { font-size: 2.6rem; font-weight: 800; font-variant-numeric: tabular-nums; min-width: 2ch; text-align: right; }
-  .side.lit .tally, .side.lit .names { color: var(--gold); }
-
-  .dot { width: 0.6rem; height: 0.6rem; border-radius: 50%; background: var(--gold); flex: none; }
+  .dot { width: 0.55rem; height: 0.55rem; border-radius: 50%; background: var(--gold); flex: none; }
   .dot.off { visibility: hidden; }
 
   /* one box per rack in that side's race, filling as they are won */
-  .bar { display: flex; gap: 3px; margin-top: 6px; }
-  .bar i { flex: 1; height: 8px; border-radius: 2px; background: #3d4c5c; }
+  .bar { display: flex; gap: 3px; margin-top: 8px; width: 100%; }
+  .bar i { flex: 1; height: 7px; border-radius: 2px; background: #3d4c5c; }
   .bar i.won { background: var(--paper); }
-  .side.lit .bar i.won { background: var(--gold); }
+  .lit .bar i.won { background: var(--gold); }
 
   /* ---- reference below ---- */
   section { padding: 16px; border-top: 1px solid var(--line); }
@@ -56,7 +60,7 @@
   table { width: 100%; border-collapse: collapse; font-size: 0.95rem; }
   th { text-align: left; font-size: 0.68rem; letter-spacing: 0.06em; text-transform: uppercase; color: var(--muted); font-weight: 600; padding-bottom: 6px; }
   td { padding: 7px 0; border-top: 1px solid var(--line); vertical-align: top; }
-  td.num { text-align: right; font-variant-numeric: tabular-nums; white-space: nowrap; }
+  th.num, td.num { text-align: right; font-variant-numeric: tabular-nums; white-space: nowrap; }
 
   tr.current td { background: #2f3f52; }
   tr.played td { color: var(--muted); }
@@ -64,19 +68,18 @@
   .vs { color: var(--muted); font-size: 0.85rem; }
   .sitting { color: var(--muted); font-size: 0.82rem; }
 
-  /* ---- plus / minus: the tally sits between them ---- */
-  .adjust { display: flex; align-items: center; gap: 6px; flex: none; }
-  .adjust .tally { min-width: 1.4ch; text-align: center; }
-  .adjust button {
-    width: 48px; height: 48px; border-radius: 12px; flex: none;
+  /* ---- plus / minus, side by side under the score ---- */
+  .pm { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; width: 100%; }
+  .pm button {
+    height: 52px; border-radius: 12px; padding: 0;
     border: 1px solid var(--line); background: var(--deep); color: var(--paper);
-    font: 700 1.6rem/1 system-ui, sans-serif; padding: 0;
+    font: 700 1.6rem/1 system-ui, sans-serif;
     touch-action: manipulation; -webkit-tap-highlight-color: transparent;
   }
-  .adjust button.plus { background: #3a4c61; border-color: #4a5e75; }
-  .adjust button:active:not(:disabled) { transform: scale(0.94); background: var(--gold); color: var(--deep); }
-  .adjust button:disabled { opacity: 0.3; }
-  .viewonly .adjust button { display: none; }
+  .pm button.plus { background: #3a4c61; border-color: #4a5e75; }
+  .pm button:active:not(:disabled) { transform: scale(0.96); background: var(--gold); color: var(--deep); }
+  .pm button:disabled { opacity: 0.3; }
+  .viewonly .pm { display: none; }
 
   /* ---- asking to score ---- */
   .access { padding: 12px 16px 14px; background: var(--ink); border-top: 1px solid var(--line); }
@@ -97,26 +100,26 @@
   .access form + p:not(:empty) { margin-top: 8px; }
   .access p.good { color: var(--paper); }
 
-  /* ---- match setup: one-off matches, allowed phones only ---- */
-  .setup-row { display: flex; align-items: center; gap: 12px; min-height: 52px; }
-  .setup-row + .setup-row { border-top: 1px solid var(--line); }
-  .setup-row .label { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-  .setup-row .muted { color: var(--muted); font-size: 0.85rem; }
-  .stepper { display: flex; align-items: center; gap: 6px; flex: none; }
-  .stepper output { min-width: 2ch; text-align: center; font-size: 1.3rem; font-weight: 700; font-variant-numeric: tabular-nums; }
+  /* ---- match setup: one-off matches, allowed phones only ----
+     The same two columns as the score, with a header over each control. */
+  .setup h2 + .cols { margin-bottom: 18px; }
+  .setup .col { display: flex; flex-direction: column; gap: 6px; padding: 0 14px; }
+  .setup .col:first-child { padding-left: 0; }
+  .setup .col:last-child { padding-right: 0; }
+  .field-label { color: var(--muted); font-size: 0.85rem; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .stepper { display: grid; grid-template-columns: 44px 1fr 44px; align-items: center; }
+  .stepper output { text-align: center; font-size: 1.4rem; font-weight: 700; font-variant-numeric: tabular-nums; }
   .setup button, .setup select {
     height: 44px; border-radius: 10px; border: 1px solid var(--line);
     background: var(--ink); color: var(--paper); font: inherit;
     touch-action: manipulation; -webkit-tap-highlight-color: transparent;
   }
-  .stepper button { width: 44px; padding: 0; font: 700 1.4rem/1 system-ui, sans-serif; }
+  .stepper button { padding: 0; font: 700 1.4rem/1 system-ui, sans-serif; }
   .setup button:disabled { opacity: 0.3; }
   .setup button:active:not(:disabled) { background: var(--gold); color: var(--deep); }
-  .setup select { width: 55%; max-width: 220px; padding: 0 10px; flex: none; }
-  .setup .hint { margin: 8px 0 0; color: var(--muted); font-size: 0.82rem; }
+  .setup select { width: 100%; padding: 0 10px; }
+  .setup .hint { margin: -8px 0 16px; color: var(--muted); font-size: 0.82rem; }
   .setup .clear { width: 100%; font-weight: 700; border-color: #6b5530; color: var(--gold); }
-  h2 + .setup-row { margin-top: -6px; }
-  .setup-group + .setup-group { margin-top: 18px; }
 
   footer { padding: 14px 16px 24px; color: var(--muted); font-size: 0.78rem; }
   .offline { color: var(--gold); }
@@ -125,28 +128,22 @@
 <body>
   <header><h1 id="heading">Connecting…</h1></header>
 
-  <div class="score viewonly" id="score">
-    <div class="side" id="homeSide">
-      <span class="dot off" id="homeDot"></span>
-      <div style="flex:1;min-width:0">
-        <div class="names" id="homeNames"></div>
-        <div class="bar" id="homeBar"></div>
-      </div>
-      <div class="adjust">
+  <div class="score cols viewonly" id="score">
+    <div class="col" id="homeSide">
+      <div class="names"><span class="dot off" id="homeDot"></span><div class="stack" id="homeNames"></div></div>
+      <div class="bar" id="homeBar"></div>
+      <div class="tally" id="homeScore">0</div>
+      <div class="pm">
         <button type="button" id="homeMinus" aria-label="Take a rack off">&minus;</button>
-        <div class="tally" id="homeScore">0</div>
         <button type="button" class="plus" id="homePlus" aria-label="Add a rack">+</button>
       </div>
     </div>
-    <div class="side" id="awaySide">
-      <span class="dot off" id="awayDot"></span>
-      <div style="flex:1;min-width:0">
-        <div class="names" id="awayNames"></div>
-        <div class="bar" id="awayBar"></div>
-      </div>
-      <div class="adjust">
+    <div class="col" id="awaySide">
+      <div class="names"><span class="dot off" id="awayDot"></span><div class="stack" id="awayNames"></div></div>
+      <div class="bar" id="awayBar"></div>
+      <div class="tally" id="awayScore">0</div>
+      <div class="pm">
         <button type="button" id="awayMinus" aria-label="Take a rack off">&minus;</button>
-        <div class="tally" id="awayScore">0</div>
         <button type="button" class="plus" id="awayPlus" aria-label="Add a rack">+</button>
       </div>
     </div>
@@ -161,18 +158,18 @@
   </div>
 
   <section id="setupSection" class="setup" hidden>
-    <div class="setup-group">
-      <h2>Race</h2>
-      <div class="setup-row">
-        <span class="label" id="homeRaceLabel">Home races to</span>
+    <h2>Race</h2>
+    <div class="cols">
+      <div class="col">
+        <div class="field-label" id="homeRaceLabel">Home races to</div>
         <div class="stepper">
           <button type="button" id="homeRaceDown" aria-label="Shorter race">&minus;</button>
           <output id="homeRace">3</output>
           <button type="button" id="homeRaceUp" aria-label="Longer race">+</button>
         </div>
       </div>
-      <div class="setup-row">
-        <span class="label" id="awayRaceLabel">Away races to</span>
+      <div class="col">
+        <div class="field-label" id="awayRaceLabel">Away races to</div>
         <div class="stepper">
           <button type="button" id="awayRaceDown" aria-label="Shorter race">&minus;</button>
           <output id="awayRace">3</output>
@@ -181,15 +178,14 @@
       </div>
     </div>
 
-    <div class="setup-group">
-      <h2>Players</h2>
-      <div id="slots"></div>
-      <p class="hint">Changing a player starts the score again from 0 - 0.</p>
+    <h2>Players</h2>
+    <div class="cols">
+      <div class="col" id="homePicks"></div>
+      <div class="col" id="awayPicks"></div>
     </div>
+    <p class="hint">Changing a player starts the score again from 0 - 0.</p>
 
-    <div class="setup-group">
-      <button type="button" class="clear" id="clearScores">Clear scores</button>
-    </div>
+    <button type="button" class="clear" id="clearScores">Clear scores</button>
   </section>
 
   <section id="leaderSection" hidden>
@@ -400,10 +396,10 @@
     showButtons();
     if (!setup) return;
 
-    const both = (list) => list.join(" & ");
+    const races = (list) => list.join(" & ") + (list.length > 1 ? " race to" : " races to");
     const s = state.score;
-    $("homeRaceLabel").textContent = both(s.home) + " races to";
-    $("awayRaceLabel").textContent = both(s.away) + " races to";
+    $("homeRaceLabel").textContent = races(s.home);
+    $("awayRaceLabel").textContent = races(s.away);
 
     for (const [prefix, target] of [["home", setup.homeTarget], ["away", setup.awayTarget]]) {
       $(prefix + "Race").textContent = target;
@@ -416,33 +412,37 @@
     const shape = JSON.stringify([setup.slots.map((slot) => slot.label), setup.players]);
     if (shape !== slotsShape) {
       slotsShape = shape;
-      const slots = $("slots");
-      slots.textContent = "";
 
-      setup.slots.forEach((slot, index) => {
-        const row = document.createElement("label");
-        row.className = "setup-row";
+      // The first half of the slots is side A, the second half side B, each
+      // under one header: "Player A" in singles, "Team A" in doubles.
+      const half = setup.slots.length / 2;
+      for (const [prefix, from] of [["home", 0], ["away", half]]) {
+        const column = $(prefix + "Picks");
+        column.textContent = "";
 
-        const label = document.createElement("span");
-        label.className = "label";
-        label.textContent = slot.label;
+        const header = document.createElement("div");
+        header.className = "field-label";
+        header.textContent = setup.slots[from].label.replace(/\s*\(\d+\)$/, "");
+        column.append(header);
 
-        const pick = document.createElement("select");
-        pick.dataset.slot = index;
-        pick.append(new Option("—", ""));
-        for (const player of setup.players) pick.append(new Option(player.name, player.id));
+        for (let index = from; index < from + half; index += 1) {
+          const pick = document.createElement("select");
+          pick.dataset.slot = index;
+          pick.setAttribute("aria-label", setup.slots[index].label);
+          pick.append(new Option("\u2014", ""));
+          for (const player of setup.players) pick.append(new Option(player.name, player.id));
 
-        // Picking someone already playing swaps the two, at the PC.
-        pick.addEventListener("change", () => {
-          change({ change: "slot", value: index, player: pick.value || null });
-        });
+          // Picking someone already playing swaps the two, at the PC.
+          pick.addEventListener("change", () => {
+            change({ change: "slot", value: index, player: pick.value || null });
+          });
 
-        row.append(label, pick);
-        slots.append(row);
-      });
+          column.append(pick);
+        }
+      }
     }
 
-    for (const pick of $("slots").querySelectorAll("select")) {
+    for (const pick of $("setupSection").querySelectorAll("select")) {
       pick.value = setup.slots[pick.dataset.slot].player || "";
     }
   }
