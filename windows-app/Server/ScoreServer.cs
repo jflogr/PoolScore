@@ -266,15 +266,24 @@ public sealed class ScoreServer : IAsyncDisposable
             // without saying so.
             var keepAlive = Task.Delay(Timeout.Infinite, context.RequestAborted);
 
+            // The read is kept across pings. Starting a fresh one each time
+            // round would leave the old one still waiting, and it would take
+            // the next score change and drop it - one lost change per ping.
+            Task<string>? next = null;
+
             while (!context.RequestAborted.IsCancellationRequested)
             {
-                var next = channel.Reader.ReadAsync(context.RequestAborted).AsTask();
+                next ??= channel.Reader.ReadAsync(context.RequestAborted).AsTask();
                 var tick = Task.Delay(TimeSpan.FromSeconds(15), context.RequestAborted);
 
                 var done = await Task.WhenAny(next, tick, keepAlive);
                 if (done == keepAlive) break;
 
-                if (done == next) await Write(context, await next);
+                if (done == next)
+                {
+                    await Write(context, await next);
+                    next = null;
+                }
                 else await context.Response.WriteAsync(Frame("ping", "{}"), context.RequestAborted);
 
                 await context.Response.Body.FlushAsync(context.RequestAborted);
