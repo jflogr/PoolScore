@@ -104,8 +104,11 @@ public sealed class ScoreServer : IAsyncDisposable
             app.MapGet("/api/events", Events);
             app.MapGet("/api/access", (HttpContext context) =>
                 Results.Content(Access(Phones.StatusOf(context.Request.Query["key"])), "application/json"));
-            app.MapPost("/api/ask", Ask);
-            app.MapPost("/api/tap", Tap);
+            // Cast to Delegate, or these bind as a plain RequestDelegate and
+            // the result they return - the ask's answer, a tap's 403 - is
+            // thrown away, leaving every reply an empty 200.
+            app.MapPost("/api/ask", (Delegate)Ask);
+            app.MapPost("/api/tap", (Delegate)Tap);
 
             // Anything else is the page again, so a stray path still works - but
             // only for a read. Left unguarded the fallback answers every verb,
