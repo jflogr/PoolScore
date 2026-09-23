@@ -256,20 +256,23 @@ public sealed class ScoreServer : IAsyncDisposable
             // restarted and forgot every approval - learns where it stands.
             if (key is not null) await Write(context, Frame("access", Access(Phones.StatusOf(key))));
 
-            // A comment every so often keeps the connection alive through a
-            // phone dozing off or a router with an idle timeout.
+            // A ping every so often keeps the connection alive through a router
+            // with an idle timeout. It is a named event rather than an SSE
+            // comment because the page never sees comments, and the page needs
+            // to hear something regularly to notice a connection that has died
+            // without saying so.
             var keepAlive = Task.Delay(Timeout.Infinite, context.RequestAborted);
 
             while (!context.RequestAborted.IsCancellationRequested)
             {
                 var next = channel.Reader.ReadAsync(context.RequestAborted).AsTask();
-                var tick = Task.Delay(TimeSpan.FromSeconds(20), context.RequestAborted);
+                var tick = Task.Delay(TimeSpan.FromSeconds(15), context.RequestAborted);
 
                 var done = await Task.WhenAny(next, tick, keepAlive);
                 if (done == keepAlive) break;
 
                 if (done == next) await Write(context, await next);
-                else await context.Response.WriteAsync(": ping\n\n", context.RequestAborted);
+                else await context.Response.WriteAsync(Frame("ping", "{}"), context.RequestAborted);
 
                 await context.Response.Body.FlushAsync(context.RequestAborted);
             }

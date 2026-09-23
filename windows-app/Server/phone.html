@@ -365,31 +365,63 @@
     $("upcomingSection").hidden = state.upcoming.length === 0;
   }
 
-  function watch() {
-    const source = new EventSource("api/events?key=" + key);
+  // ---- staying live -----------------------------------------------------
+  // Scores are pushed the moment they change - there is no timer. What goes
+  // wrong on phones is the connection dying without a word: the screen locks,
+  // the browser is sent to the background, or the phone hops between wifi and
+  // mobile data. The page is then left showing an old score with nothing to
+  // say it is stale. So the server pings every 15 seconds, and if this page
+  // hears nothing for 40 it opens a fresh connection. Coming back to the page
+  // always reconnects, which brings the current score straight away.
+  const Silence = 40000;
+  let source = null;
+  let lastHeard = 0;
+
+  function heard() {
+    lastHeard = Date.now();
+    $("status").textContent = "Watching live.";
+    $("status").classList.remove("offline");
+  }
+
+  function connect() {
+    if (source) source.close();
+    lastHeard = Date.now();
+
+    source = new EventSource("api/events?key=" + key);
+
+    source.addEventListener("open", heard);
+    source.addEventListener("ping", heard);
 
     source.addEventListener("access", (event) => {
+      heard();
       setAccess(JSON.parse(event.data).status);
     });
 
     source.addEventListener("state", (event) => {
-      $("status").textContent = "Watching live.";
-      $("status").classList.remove("offline");
+      heard();
       render(JSON.parse(event.data));
     });
 
-    // EventSource reconnects on its own; just say so while it is down.
+    // EventSource retries on its own; just say so while it is down.
     source.addEventListener("error", () => {
-      $("status").textContent = "Lost the scorer — reconnecting…";
+      $("status").textContent = "Lost the scorer \u2014 reconnecting\u2026";
       $("status").classList.add("offline");
     });
   }
 
-  fetch("api/state", { cache: "no-store" })
-    .then((response) => response.json())
-    .then(render)
-    .catch(() => {})
-    .finally(watch);
+  setInterval(() => {
+    if (document.visibilityState === "visible" && Date.now() - lastHeard > Silence) connect();
+  }, 5000);
+
+  document.addEventListener("visibilitychange", () => {
+    if (document.visibilityState === "visible") connect();
+  });
+
+  // Back from another app via the browser's back/forward cache, or back online.
+  window.addEventListener("pageshow", (event) => { if (event.persisted) connect(); });
+  window.addEventListener("online", connect);
+
+  connect();
 </script>
 </body>
 </html>
