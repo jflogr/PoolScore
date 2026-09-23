@@ -10,17 +10,22 @@ using Microsoft.AspNetCore.Http;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Logging;
+using PoolScoreTracker.Domain;
 
 namespace PoolScoreTracker.Server;
 
+/// <summary>A phone asking for one rack to be added to or taken off a side.</summary>
+public sealed record PhoneTap(string Game, Side Side, int Delta);
+
 /// <summary>
-/// Serves the spectator view to phones on the same wifi. Read-only by design:
-/// there is no endpoint that changes anything, so a phone cannot break a match
-/// and there is no conflict handling to get wrong.
+/// Serves the phone view to phones on the same wifi. Phones can nudge the
+/// current score up or down by one rack and nothing else - no format, players,
+/// finishing a set or undo - so a phone cannot break the setup mid-game.
 ///
 /// The live session belongs to the UI thread and is never touched from here.
 /// The window hands over a finished <see cref="Snapshot"/> whenever something
-/// changes, and requests are answered from that.
+/// changes, and requests are answered from that. A tap goes the other way as
+/// a <see cref="Tapped"/> event, and the window applies it on its own thread.
 /// </summary>
 public sealed class ScoreServer : IAsyncDisposable
 {
@@ -50,6 +55,12 @@ public sealed class ScoreServer : IAsyncDisposable
     /// </summary>
     public event EventHandler? AddressesChanged;
 
+    /// <summary>
+    /// A phone tapped plus or minus. Arrives on a request thread; the window
+    /// decides whether it still applies and makes the change on the UI thread.
+    /// </summary>
+    public event EventHandler<PhoneTap>? Tapped;
+
     public async Task<bool> StartAsync(int port = 4174)
     {
         if (_app is not null) return true;
@@ -65,11 +76,11 @@ public sealed class ScoreServer : IAsyncDisposable
             app.MapGet("/", () => Results.Content(Page(), "text/html; charset=utf-8"));
             app.MapGet("/api/state", () => Results.Content(_payload, "application/json"));
             app.MapGet("/api/events", Events);
+            app.MapPost("/api/tap", Tap);
 
             // Anything else is the page again, so a stray path still works - but
             // only for a read. Left unguarded the fallback answers every verb,
-            // and a POST coming back 200 would make a read-only server look
-            // like it had accepted something.
+            // and a POST coming back 200 would look like it had been accepted.
             app.MapFallback((HttpContext context) =>
                 HttpMethods.IsGet(context.Request.Method) || HttpMethods.IsHead(context.Request.Method)
                     ? Results.Content(Page(), "text/html; charset=utf-8")
@@ -129,6 +140,37 @@ public sealed class ScoreServer : IAsyncDisposable
             foreach (var listener in _listeners) listener.Writer.TryWrite(payload);
         }
     }
+
+    /// <summary>
+    /// One rack up or down for one side. Answered as soon as it is handed on:
+    /// the phone learns the result the same way it learns everything else,
+    /// from the next snapshot on the event stream.
+    /// </summary>
+    private async Task<IResult> Tap(HttpContext context)
+    {
+        TapRequest? request;
+        try
+        {
+            request = await context.Request.ReadFromJsonAsync<TapRequest>(Json, context.RequestAborted);
+        }
+        catch (Exception)
+        {
+            return Results.BadRequest();
+        }
+
+        if (request is null || string.IsNullOrEmpty(request.Game)) return Results.BadRequest();
+        if (request.Delta is not (1 or -1)) return Results.BadRequest();
+
+        Side side;
+        if (request.Side == "home") side = Side.Home;
+        else if (request.Side == "away") side = Side.Away;
+        else return Results.BadRequest();
+
+        Tapped?.Invoke(this, new PhoneTap(request.Game, side, request.Delta));
+        return Results.Accepted();
+    }
+
+    private sealed record TapRequest(string? Game, string? Side, int Delta);
 
     private async Task Events(HttpContext context)
     {

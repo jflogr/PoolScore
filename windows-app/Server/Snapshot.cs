@@ -24,22 +24,40 @@ public sealed record UpcomingLine(
     string? BreaksFirst);
 
 /// <summary>
-/// Everything a phone is allowed to see, frozen at one moment. Phones are
-/// spectators here - there is nothing to send back - so this is the whole
-/// contract, and building it on the UI thread is what keeps the live session
-/// off the server's threads entirely.
+/// Everything a phone is allowed to see, frozen at one moment. Building it on
+/// the UI thread is what keeps the live session off the server's threads
+/// entirely.
+///
+/// <see cref="Game"/> names the game on screen. A phone sends it back with a
+/// tap, and a tap for a game that is no longer on screen is dropped - so a
+/// phone that has not caught up yet cannot score into the next set.
 /// </summary>
 public sealed record Snapshot(
     long Rev,
     string Mode,
     string Heading,
+    string Game,
+    bool CanScore,
     ScoreLine Score,
     LeaderLine[] Leaders,
     UpcomingLine[] Upcoming)
 {
     public static readonly Snapshot Waiting = new(
-        0, "-", "Waiting for the scorer",
+        0, "-", "Waiting for the scorer", "-", false,
         new ScoreLine([], [], 0, 0, 1, 1, null), [], []);
+
+    /// <summary>
+    /// Which game is being scored: the set in a round robin, the mode in a
+    /// one-off match. Nothing once every set is played.
+    /// </summary>
+    public static string GameFor(Session session)
+    {
+        if (!session.IsRoundRobin) return session.Config.Key;
+
+        return session.CurrentSet() is { } current && !current.Score.Committed
+            ? $"{session.Config.Key}/set-{current.Match.Set}"
+            : "-";
+    }
 
     public static Snapshot From(Session session, long rev)
     {
@@ -55,7 +73,12 @@ public sealed record Snapshot(
             .Select(row => new LeaderLine(row.Name, row.Wins, row.Played, row.Possible))
             .ToArray();
 
-        return new Snapshot(rev, session.Config.Key, BuildHeading(session), score, leaders, BuildUpcoming(session));
+        var game = GameFor(session);
+
+        return new Snapshot(
+            rev, session.Config.Key, BuildHeading(session),
+            game, game != "-",
+            score, leaders, BuildUpcoming(session));
     }
 
     private static string BuildHeading(Session session)

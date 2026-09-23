@@ -64,6 +64,20 @@
   .vs { color: var(--muted); font-size: 0.85rem; }
   .sitting { color: var(--muted); font-size: 0.82rem; }
 
+  /* ---- plus / minus: the tally sits between them ---- */
+  .adjust { display: flex; align-items: center; gap: 6px; flex: none; }
+  .adjust .tally { min-width: 1.4ch; text-align: center; }
+  .adjust button {
+    width: 48px; height: 48px; border-radius: 12px; flex: none;
+    border: 1px solid var(--line); background: var(--deep); color: var(--paper);
+    font: 700 1.6rem/1 system-ui, sans-serif; padding: 0;
+    touch-action: manipulation; -webkit-tap-highlight-color: transparent;
+  }
+  .adjust button.plus { background: #3a4c61; border-color: #4a5e75; }
+  .adjust button:active:not(:disabled) { transform: scale(0.94); background: var(--gold); color: var(--deep); }
+  .adjust button:disabled { opacity: 0.3; }
+  .viewonly .adjust button { display: none; }
+
   footer { padding: 14px 16px 24px; color: var(--muted); font-size: 0.78rem; }
   .offline { color: var(--gold); }
 </style>
@@ -71,14 +85,18 @@
 <body>
   <header><h1 id="heading">Connecting…</h1></header>
 
-  <div class="score">
+  <div class="score viewonly" id="score">
     <div class="side" id="homeSide">
       <span class="dot off" id="homeDot"></span>
       <div style="flex:1;min-width:0">
         <div class="names" id="homeNames"></div>
         <div class="bar" id="homeBar"></div>
       </div>
-      <div class="tally" id="homeScore">0</div>
+      <div class="adjust">
+        <button type="button" id="homeMinus" aria-label="Take a rack off">&minus;</button>
+        <div class="tally" id="homeScore">0</div>
+        <button type="button" class="plus" id="homePlus" aria-label="Add a rack">+</button>
+      </div>
     </div>
     <div class="side" id="awaySide">
       <span class="dot off" id="awayDot"></span>
@@ -86,7 +104,11 @@
         <div class="names" id="awayNames"></div>
         <div class="bar" id="awayBar"></div>
       </div>
-      <div class="tally" id="awayScore">0</div>
+      <div class="adjust">
+        <button type="button" id="awayMinus" aria-label="Take a rack off">&minus;</button>
+        <div class="tally" id="awayScore">0</div>
+        <button type="button" class="plus" id="awayPlus" aria-label="Add a rack">+</button>
+      </div>
     </div>
   </div>
 
@@ -130,6 +152,9 @@
     }
   }
 
+  let game = "-";
+  let canScore = false;
+
   function side(prefix, list, score, target, breaking) {
     const won = score >= target;
     const onHill = !won && score === target - 1;
@@ -139,10 +164,38 @@
     bar($(prefix + "Bar"), score, target);
     $(prefix + "Dot").classList.toggle("off", !breaking);
     $(prefix + "Side").classList.toggle("lit", onHill || won);
+    $(prefix + "Minus").disabled = !canScore || score <= 0;
+    $(prefix + "Plus").disabled = !canScore || score >= target;
   }
+
+  // Send the game the tap was aimed at, so a tap that lands after the set has
+  // moved on is dropped rather than scored into the next one. The new score
+  // comes back on the event stream like any other change.
+  function tap(sideName, delta) {
+    if (!canScore) return;
+    fetch("api/tap", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ game, side: sideName, delta })
+    })
+      .then((response) => { if (!response.ok) throw new Error(); })
+      .catch(() => {
+        $("status").textContent = "That tap did not reach the scorer.";
+        $("status").classList.add("offline");
+      });
+  }
+
+  $("homeMinus").addEventListener("click", () => tap("home", -1));
+  $("homePlus").addEventListener("click", () => tap("home", 1));
+  $("awayMinus").addEventListener("click", () => tap("away", -1));
+  $("awayPlus").addEventListener("click", () => tap("away", 1));
 
   function render(state) {
     $("heading").textContent = state.heading;
+
+    game = state.game || "-";
+    canScore = !!state.canScore;
+    $("score").classList.toggle("viewonly", !canScore);
 
     const s = state.score;
     side("home", s.home, s.homeScore, s.homeTarget, s.breaking === "home");

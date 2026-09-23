@@ -88,8 +88,8 @@ TWO WAYS TO RUN IT
    "Banner" opens a separate fixed-size window with just the score line in it -
    that is the one to point OBS at (see STREAMING below).
 
-   It serves the phone view itself, so phones on the same wifi can watch
-   without anything else running.
+   It serves the phone view itself, so phones on the same wifi can watch and
+   nudge the score without anything else running.
 
    Players and scores are remembered between runs in one file:
      %LOCALAPPDATA%\PoolScore\session.json
@@ -105,8 +105,8 @@ TWO WAYS TO RUN IT
 
 2. INSTALLED BROWSER APP - see INSTALL IT ONCE below.
    The original web version, installed into Windows from the browser. Still
-   here, still works, and this is the one to use on a Mac or a tablet. Unlike
-   the Windows app, phones can score on it as well as watch.
+   here, still works, and this is the one to use on a Mac or a tablet. Phones
+   can score on it as well as watch.
 
 The two keep separate players and scores, because they store them in different
 places. Pick one and stick with it.
@@ -140,12 +140,17 @@ address it prints (http://localhost:4174), and install from the browser menu.
 -------------------------------------------------------------------
 PHONES (same wifi)
 -------------------------------------------------------------------
-WINDOWS APP - watching only
+WINDOWS APP - watching, plus the score
 - Nothing to start. The app serves the phone view itself, on port 4174.
 - Scan the QR code on the Match settings tab, or type the address printed
   above it.
-- Phones get a read-only view: the live score, the leaderboard and the full
-  schedule. They cannot change anything, so nobody can break the setup mid-game.
+- Phones get the live score, the leaderboard and the full schedule, with a
+  minus and a plus beside each side's score. That is all a phone can change:
+  not the format, the players, finishing the set or undo - so nobody can break
+  the setup mid-game. Finishing a set is still done at the PC.
+- A tap is tied to the set that was on the phone's screen. If the set has moved
+  on by the time it arrives, it is dropped rather than scored into the next one.
+- Anyone on the wifi who opens the page can use the buttons.
 - The first run raises a Windows firewall prompt, because the app has to accept
   connections from the wifi. Tick BOTH private and public networks. A laptop
   that has never been told the house wifi is trusted counts it as public, so

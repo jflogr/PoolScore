@@ -125,6 +125,20 @@ public sealed class MainWindow : Form
             _save.Start();
         };
 
+        // A phone's plus or minus arrives on a request thread. It is handed to
+        // the UI thread and applied there like a keypress - unless the game it
+        // was aimed at is no longer the one being scored.
+        _server.Tapped += (_, tap) =>
+        {
+            if (IsDisposed || Disposing || !IsHandleCreated) return;
+
+            BeginInvoke(() =>
+            {
+                if (Snapshot.GameFor(_session) != tap.Game) return;
+                _session.Adjust(tap.Side, tap.Delta);
+            });
+        };
+
         Sync();
     }
 
