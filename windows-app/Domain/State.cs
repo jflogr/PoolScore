@@ -21,5 +21,16 @@ public sealed class SetScore(int set)
     /// <summary>The home side breaks unless this set's break has been swapped by hand.</summary>
     public bool BreakSwapped { get; set; }
 
+    /// <summary>
+    /// When the set got going: the moment the set before it was finished, or
+    /// its first rack if nothing started it - the first set of the night.
+    /// </summary>
+    public DateTimeOffset? StartedAt { get; set; }
+
+    public DateTimeOffset? FinishedAt { get; set; }
+
     public int RacksPlayed => Home + Away;
+
+    /// <summary>How long the set took, or has taken so far. Null until it starts.</summary>
+    public TimeSpan? Duration(DateTimeOffset now) => Timing.Between(StartedAt, FinishedAt, now);
 }

@@ -85,6 +85,17 @@ public sealed partial class PhoneAccess
         }
     }
 
+    /// <summary>The name a phone asked with, for telling others who scored.</summary>
+    public string NameOf(string? key)
+    {
+        if (!IsKey(key)) return "A phone";
+
+        lock (_gate)
+        {
+            return _byKey.TryGetValue(key!, out var entry) ? entry.Name : "A phone";
+        }
+    }
+
     /// <summary>
     /// A phone asking to score. Asking again while waiting only updates the
     /// name, and a phone already allowed is simply told so. Comes back as

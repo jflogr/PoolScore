@@ -37,7 +37,7 @@ public sealed class BannerForm : Form
     // Deliberately NOT FixedToolWindow: that sets WS_EX_TOOLWINDOW, and OBS
     // drops tool windows from its window list entirely.
     private const int DefaultWidth = 1280;
-    private const int DefaultHeight = 120;
+    private const int DefaultHeight = 96;
 
     private static readonly Color Ink = ColorTranslator.FromHtml("#2b3846");
 
@@ -109,7 +109,9 @@ public sealed class BannerForm : Form
         var width = ClientSize.Width;
         if (width < 200 || height < 50) return;
 
-        var blockHeight = height * 0.76f;
+        // The score block takes more of the height than it did at 120px, so
+        // trimming the banner costs mostly margin rather than the numbers.
+        var blockHeight = height * 0.84f;
         var blockTop = (height - blockHeight) / 2f;
         var centre = height / 2f;
 
@@ -192,8 +194,8 @@ public sealed class BannerForm : Form
         var sideWidth = Math.Max(0f, blockLeft - gap - dotSpace - pad);
         var nameBox = new SizeF(sideWidth, height - gap);
         var nameSize = Math.Min(
-            Measure(g, _state.HomeNames, height * 0.34f, nameBox),
-            Measure(g, _state.AwayNames, height * 0.34f, nameBox));
+            Measure(g, _state.HomeNames, height * 0.38f, nameBox),
+            Measure(g, _state.AwayNames, height * 0.38f, nameBox));
 
         DrawName(g, _state.HomeNames, nameSize, nameBox, blockLeft - gap, centre,
                  rightAligned: true, breaking: _state.Breaking == Side.Home, dot, dotSpace);

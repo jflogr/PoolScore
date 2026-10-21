@@ -35,7 +35,15 @@ public sealed class MainWindow : Form
     private readonly ToolStrip _commands = new();
     private readonly TabControl _tabs = new();
     private readonly ListView _leaders = NewList();
+
+    // Singles and doubles races already played tonight, under the player stats.
+    private readonly ListView _history = NewList();
+    private readonly SplitContainer _statsSplit = new() { Orientation = Orientation.Horizontal };
     private readonly ListView _matches = NewList();
+
+    /// <summary>The Matches row being played, so the clock can tick in it without a refill.</summary>
+    private ListViewItem? _playingRow;
+    private const int TimeColumn = 7;
 
     private ToolStripButton _undo = null!;
     private ToolStripButton _reset = null!;
@@ -69,6 +77,26 @@ public sealed class MainWindow : Form
     private readonly System.Windows.Forms.Timer _save = new() { Interval = 1200 };
 
     private readonly ScoreServer _server = new();
+
+    // The clocks tick on their own; nothing in the session changes each
+    // second, so this redraws the times without saving or publishing.
+    private readonly System.Windows.Forms.Timer _tick = new() { Interval = 1000 };
+
+    // How long a turned-away rack's notice stays over the scoreboard.
+    private readonly System.Windows.Forms.Timer _noticeTimer = new() { Interval = 4000 };
+
+    // The evening's pace, in a slim line under the scoreboard: round robins only.
+    private readonly Label _pace = new()
+    {
+        Dock = DockStyle.Top,
+        Height = 34,
+        Padding = new Padding(14, 0, 14, 0),
+        TextAlign = ContentAlignment.MiddleLeft,
+        AutoEllipsis = true,
+        BackColor = ColorTranslator.FromHtml("#e6ebf1"),
+        ForeColor = Ink,
+        Font = new Font(FontFamily.GenericSansSerif, 11f)
+    };
 
     // A phone asking to score shows up in a bar between the scoreboard and
     // the tabs - in view, but never over the score and never taking focus.
@@ -140,17 +168,18 @@ public sealed class MainWindow : Form
 
         _scoring.Dock = DockStyle.Top;
         _scoring.Height = ClientSize.Height / 2;
-        _scoring.HomeDelta += (_, delta) => _session.Adjust(Side.Home, delta);
-        _scoring.AwayDelta += (_, delta) => _session.Adjust(Side.Away, delta);
+        _scoring.HomeDelta += (_, delta) => Score(Side.Home, delta);
+        _scoring.AwayDelta += (_, delta) => Score(Side.Away, delta);
         _scoring.ActionClicked += (_, _) => FinishSet();
 
         // Docking resolves from the last control added outwards, so this reads
-        // backwards: toolbar at the very top, then the scoreboard full width,
-        // then the phone strip down the right of what is left, and the tabs
-        // filling the rest.
+        // backwards: toolbar at the very top, then the scoreboard full width
+        // with the pace line under it, then the phone strip down the right of
+        // what is left, and the tabs filling the rest.
         Controls.Add(_tabs);
         Controls.Add(BuildPhoneStrip());
         Controls.Add(BuildAskBar());
+        Controls.Add(_pace);
         Controls.Add(_scoring);
         Controls.Add(_commands);
 
@@ -158,6 +187,15 @@ public sealed class MainWindow : Form
         {
             _save.Stop();
             SessionStore.Save(_session);
+        };
+
+        _tick.Tick += (_, _) => SyncPace(_session);
+        _tick.Start();
+
+        _noticeTimer.Tick += (_, _) =>
+        {
+            _noticeTimer.Stop();
+            _scoring.Notice = string.Empty;
         };
 
         _session.Changed += (_, _) =>
@@ -189,7 +227,14 @@ public sealed class MainWindow : Form
             BeginInvoke(() =>
             {
                 if (Snapshot.GameFor(_session) != tap.Game) return;
-                _session.Adjust(tap.Side, tap.Delta);
+
+                // Turned away because that rack was just scored - tell the
+                // phone that tried, not the room.
+                var phone = new ScoreSource(tap.Key, tap.Name);
+                if (_session.Adjust(tap.Side, tap.Delta, phone) is { } refusal)
+                {
+                    _server.Tell(tap.Key, refusal.MessageFor(phone));
+                }
             });
         };
 
@@ -324,6 +369,7 @@ public sealed class MainWindow : Form
 
         // Whatever the debounce was still holding, write it now.
         _save.Stop();
+        _tick.Stop();
         SessionStore.Save(_session);
 
         _banner?.Close();
@@ -343,11 +389,25 @@ public sealed class MainWindow : Form
     {
         if (Shortcuts.Read(keyData) is { } shortcut && ActiveControl is not (ComboBox or TextBoxBase))
         {
-            _session.Adjust(shortcut.Side, shortcut.Delta);
+            Score(shortcut.Side, shortcut.Delta);
             return true;
         }
 
         return base.ProcessCmdKey(ref message, keyData);
+    }
+
+    /// <summary>
+    /// A rack from the PC - a button, a key, or a key in the banner. If it is
+    /// turned away for following the last rack too closely, say so over the
+    /// scoreboard for a few seconds.
+    /// </summary>
+    private void Score(Side side, int delta)
+    {
+        if (_session.Adjust(side, delta, ScoreSource.Pc) is not { } refusal) return;
+
+        _scoring.Notice = refusal.MessageFor(ScoreSource.Pc);
+        _noticeTimer.Stop();
+        _noticeTimer.Start();
     }
 
     // ------------------------------------------------------------ building
@@ -561,7 +621,7 @@ public sealed class MainWindow : Form
 
         _settingsPage = Page("Match settings", BuildSettingsTab());
         _matchesPage = Page("Matches", _matches);
-        _leaderboardPage = Page("Leaderboard", _leaders);
+        _leaderboardPage = Page("Player stats", BuildStatsTab());
 
         // The last two only mean anything in a round robin; SyncTabs takes
         // them away for a one-off match rather than showing empty tables.
@@ -572,14 +632,82 @@ public sealed class MainWindow : Form
         _leaders.Columns.Add("Player", 250);
         _leaders.Columns.Add("Wins", 100);
         _leaders.Columns.Add("Possible", 110);
+        _leaders.Columns.Add("Games", 110);
 
-        _matches.Columns.Add("Set", 55);
-        _matches.Columns.Add("Round", 70);
-        _matches.Columns.Add("Home", 230);
-        _matches.Columns.Add("Score", 80);
-        _matches.Columns.Add("Away", 230);
-        _matches.Columns.Add("Sitting", 120);
-        _matches.Columns.Add("Status", 100);
+        _history.Columns.Add("#", 45);
+        _history.Columns.Add("Finished", 90);
+        _history.Columns.Add("Side A", 200);
+        _history.Columns.Add("Score", 70);
+        _history.Columns.Add("Side B", 200);
+        _history.Columns.Add("Time", 75);
+
+        // Narrow enough that Time still fits beside the phone strip at the
+        // window's opening size, without a sideways scroll to find it.
+        _matches.Columns.Add("Set", 45);
+        _matches.Columns.Add("Round", 60);
+        _matches.Columns.Add("Home", 180);
+        _matches.Columns.Add("Score", 70);
+        _matches.Columns.Add("Away", 180);
+        _matches.Columns.Add("Sitting", 100);
+        _matches.Columns.Add("Status", 85);
+        _matches.Columns.Add("Time", 75);
+    }
+
+    /// <summary>
+    /// The player stats over, in singles and doubles, the races already
+    /// played tonight. A round robin has its schedule on the Matches tab, so
+    /// there the history half is folded away and the stats get the lot.
+    /// </summary>
+    private Control BuildStatsTab()
+    {
+        var clear = new Button
+        {
+            Text = "Clear history",
+            Dock = DockStyle.Right,
+            Width = 130,
+            TabStop = false,
+            FlatStyle = FlatStyle.Flat,
+            ForeColor = Ink,
+            Font = new Font(FontFamily.GenericSansSerif, 10f)
+        };
+        clear.FlatAppearance.BorderColor = ColorTranslator.FromHtml("#c4ccd6");
+        clear.Click += (_, _) => ClearHistory();
+
+        var heading = Heading("History");
+        heading.Dock = DockStyle.Fill;
+        heading.AutoSize = false;
+        heading.TextAlign = ContentAlignment.MiddleLeft;
+
+        var bar = new Panel { Dock = DockStyle.Top, Height = 38, Padding = new Padding(0, 4, 0, 4) };
+        bar.Controls.Add(heading);
+        bar.Controls.Add(clear);
+
+        _history.Dock = DockStyle.Fill;
+        _leaders.Dock = DockStyle.Fill;
+
+        _statsSplit.Panel1.Controls.Add(_leaders);
+        _statsSplit.Panel2.Controls.Add(_history);
+        _statsSplit.Panel2.Controls.Add(bar);
+        _statsSplit.SizeChanged += (_, _) => KeepStatsSplit();
+        return _statsSplit;
+    }
+
+    /// <summary>Stats over history about 40/60, whatever the window size.</summary>
+    private void KeepStatsSplit()
+    {
+        var height = _statsSplit.Height;
+        if (height < 120 || _statsSplit.Panel2Collapsed) return;
+        _statsSplit.SplitterDistance = Math.Max(60, (int)(height * 0.4));
+    }
+
+    private void ClearHistory()
+    {
+        var answer = MessageBox.Show(this,
+            $"Clear the {_session.Config.Label} history?\n\nThe match on the board is kept.",
+            "Pool Score", MessageBoxButtons.YesNo, MessageBoxIcon.Warning,
+            MessageBoxDefaultButton.Button2);
+
+        if (answer == DialogResult.Yes) _session.ClearHistory();
     }
 
     /// <summary>Format, race, house rules, who plays where, and the phone code.</summary>
@@ -710,11 +838,63 @@ public sealed class MainWindow : Form
             SyncSetup(session);
             FillLeaders(session);
             FillMatches(session);
+            SyncPace(session);
         }
         finally
         {
             _loading = false;
         }
+    }
+
+    /// <summary>
+    /// The match clock on the scoreboard and in the Matches row, and the pace
+    /// line under the scoreboard: the average match and when the last one
+    /// should finish. Run every second as well as on every change.
+    /// </summary>
+    private void SyncPace(Session session)
+    {
+        var pace = session.Pace();
+        var clock = pace.Current is { } current ? Timing.Clock(current) : string.Empty;
+
+        _scoring.Clock = clock;
+        if (_playingRow is not null && _playingRow.SubItems[TimeColumn].Text != clock)
+        {
+            _playingRow.SubItems[TimeColumn].Text = clock;
+        }
+
+        if (!session.IsRoundRobin)
+        {
+            // No schedule, so nothing to project - but a night of several
+            // races still has an average worth knowing.
+            var played = session.Match.History.Count;
+            _pace.Visible = played > 0;
+            if (played == 0) return;
+
+            var line = played == 1 ? "1 match played" : $"{played} matches played";
+            var usualRace = pace.Average is { } length ? Timing.Clock(length) : "—";
+            var summary = $"{line}    ·    Average match {usualRace}";
+            if (_pace.Text != summary) _pace.Text = summary;
+            return;
+        }
+
+        _pace.Visible = true;
+
+        var total = session.Config.Schedule.Length;
+        var average = pace.Average is { } usual ? Timing.Clock(usual) : "—";
+
+        string text;
+        if (pace.SetsLeft == 0)
+        {
+            text = $"All {total} matches played    ·    Average match {average}";
+        }
+        else
+        {
+            var finish = pace.Finish is { } at ? Timing.TimeOfDay(at) : "—";
+            var left = pace.SetsLeft == 1 ? "1 match left" : $"{pace.SetsLeft} matches left";
+            text = $"Average match {average}    ·    {left}    ·    Projected finish {finish}";
+        }
+
+        if (_pace.Text != text) _pace.Text = text;
     }
 
     private void SyncCommands(Session session)
@@ -773,23 +953,27 @@ public sealed class MainWindow : Form
     }
 
     /// <summary>
-    /// A schedule and a table of wins only exist in a round robin, so those two
-    /// tabs come and go with the format rather than sitting there empty.
+    /// A schedule only exists in a round robin, so the Matches tab comes and
+    /// goes with the format. Player stats stays: in singles and doubles it is
+    /// worked out from the races played tonight, with their history under it.
     /// </summary>
     private void SyncTabs(Session session)
     {
-        var wanted = session.IsRoundRobin;
-        if (wanted == _tabs.TabPages.Contains(_matchesPage)) return;
+        var roundRobin = session.IsRoundRobin;
 
-        if (wanted)
+        if (roundRobin != _tabs.TabPages.Contains(_matchesPage))
         {
-            _tabs.TabPages.Add(_matchesPage);
-            _tabs.TabPages.Add(_leaderboardPage);
+            if (roundRobin) _tabs.TabPages.Insert(1, _matchesPage);
+            else _tabs.TabPages.Remove(_matchesPage);
         }
-        else
+
+        // Possible is just Wins when there is no schedule left to play.
+        _leaders.Columns[2].Width = roundRobin ? 110 : 0;
+
+        if (_statsSplit.Panel2Collapsed != roundRobin)
         {
-            _tabs.TabPages.Remove(_matchesPage);
-            _tabs.TabPages.Remove(_leaderboardPage);
+            _statsSplit.Panel2Collapsed = roundRobin;
+            KeepStatsSplit();
         }
     }
 
@@ -901,16 +1085,49 @@ public sealed class MainWindow : Form
 
         foreach (var row in session.Standings())
         {
-            _leaders.Items.Add(new ListViewItem([row.Name, $"{row.Wins}/{row.Played}", row.Possible.ToString()]));
+            _leaders.Items.Add(new ListViewItem([
+                row.Name, $"{row.Wins}/{row.Played}", row.Possible.ToString(), $"{row.RacksWon}-{row.RacksLost}"
+            ]));
         }
 
         _leaders.EndUpdate();
+        FillHistory(session);
+    }
+
+    /// <summary>Tonight's singles or doubles races, newest first, the winner marked.</summary>
+    private void FillHistory(Session session)
+    {
+        _history.BeginUpdate();
+        _history.Items.Clear();
+
+        if (!session.IsRoundRobin)
+        {
+            var history = session.Match.History;
+            for (var i = history.Count - 1; i >= 0; i--)
+            {
+                var played = history[i];
+                var home = (played.Winner == Side.Home ? "• " : "  ") + string.Join(" / ", played.HomeNames);
+                var away = (played.Winner == Side.Away ? "• " : "  ") + string.Join(" / ", played.AwayNames);
+
+                _history.Items.Add(new ListViewItem([
+                    (i + 1).ToString(),
+                    Timing.TimeOfDay(played.FinishedAt),
+                    home,
+                    $"{played.Home} - {played.Away}",
+                    away,
+                    played.Duration is { } length ? Timing.Clock(length) : "-"
+                ]));
+            }
+        }
+
+        _history.EndUpdate();
     }
 
     private void FillMatches(Session session)
     {
         _matches.BeginUpdate();
         _matches.Items.Clear();
+        _playingRow = null;
 
         // The tab itself is gone in a one-off match, so there is nothing to fill.
         if (!session.IsRoundRobin)
@@ -918,6 +1135,8 @@ public sealed class MainWindow : Form
             _matches.EndUpdate();
             return;
         }
+
+        var now = DateTimeOffset.Now;
 
         foreach (var match in session.Config.Schedule)
         {
@@ -932,12 +1151,19 @@ public sealed class MainWindow : Form
             var home = (first == Side.Home ? "• " : "  ") + Names.TeamName(match.Home, session.NameFor);
             var away = (first == Side.Away ? "• " : "  ") + Names.TeamName(match.Away, session.NameFor);
 
+            var time = score.Duration(now) is { } length ? Timing.Clock(length) : string.Empty;
+
             var item = new ListViewItem([
                 match.Set.ToString(), match.Round.ToString(), home, line, away,
-                match.Sitting is null ? "-" : session.NameFor(match.Sitting), status
+                match.Sitting is null ? "-" : session.NameFor(match.Sitting), status, time
             ]);
 
-            if (isCurrent) item.BackColor = ColorTranslator.FromHtml("#eef2f7");
+            if (isCurrent)
+            {
+                item.BackColor = ColorTranslator.FromHtml("#eef2f7");
+                _playingRow = item;
+            }
+
             _matches.Items.Add(item);
         }
 
@@ -954,7 +1180,7 @@ public sealed class MainWindow : Form
         }
 
         _banner = new BannerForm { Owner = this, State = BuildBannerState(_session) };
-        _banner.Scored += (_, shortcut) => _session.Adjust(shortcut.Side, shortcut.Delta);
+        _banner.Scored += (_, shortcut) => Score(shortcut.Side, shortcut.Delta);
         _banner.FormClosed += (_, _) => _banner = null;
         _banner.Location = new Point(Left, Math.Max(0, Top - _banner.Height - 8));
         _banner.Show();

@@ -27,6 +27,11 @@
 
   header { padding: 14px 16px 10px; }
   h1 { margin: 0; font-size: 0.8rem; font-weight: 600; letter-spacing: 0.06em; text-transform: uppercase; color: var(--muted); }
+  .pace { margin: 4px 0 0; font-size: 0.82rem; color: var(--muted); }
+  .pace:empty { display: none; }
+
+  /* a tap turned away because somebody had just scored that rack */
+  .notice { margin: 0; padding: 10px 16px; background: #fbf0d9; color: var(--deep); font-weight: 600; font-size: 0.92rem; }
 
   /* ---- two columns: side A on the left, side B on the right ---- */
   .cols { display: grid; grid-template-columns: 1fr 1fr; }
@@ -65,6 +70,7 @@
   tr.current td { background: #2f3f52; }
   tr.played td { color: var(--muted); }
   .set { color: var(--muted); font-variant-numeric: tabular-nums; padding-right: 10px; }
+  .took { color: var(--muted); font-size: 0.8rem; }
   .vs { color: var(--muted); font-size: 0.85rem; }
   .sitting { color: var(--muted); font-size: 0.82rem; }
 
@@ -126,7 +132,7 @@
 </style>
 </head>
 <body>
-  <header><h1 id="heading">Connecting…</h1></header>
+  <header><h1 id="heading">Connecting…</h1><p class="pace" id="pace"></p></header>
 
   <div class="score cols viewonly" id="score">
     <div class="col" id="homeSide">
@@ -148,6 +154,8 @@
       </div>
     </div>
   </div>
+
+  <p class="notice" id="notice" hidden></p>
 
   <div class="access">
     <form id="askForm">
@@ -189,11 +197,16 @@
   </section>
 
   <section id="leaderSection" hidden>
-    <h2>Leaderboard</h2>
+    <h2>Player stats</h2>
     <table>
-      <thead><tr><th>Player</th><th class="num">Wins</th><th class="num">Possible</th></tr></thead>
+      <thead><tr><th>Player</th><th class="num">Wins</th><th class="num" id="possibleHead">Possible</th><th class="num">Games</th></tr></thead>
       <tbody id="leaders"></tbody>
     </table>
+  </section>
+
+  <section id="historySection" hidden>
+    <h2>History</h2>
+    <table><tbody id="history"></tbody></table>
   </section>
 
   <section id="upcomingSection" hidden>
@@ -357,6 +370,15 @@
       });
   }
 
+  // Shown for a few seconds, then gone - it is news, not a state.
+  let noticeTimer = 0;
+  function notice(message) {
+    $("notice").textContent = message;
+    $("notice").hidden = false;
+    clearTimeout(noticeTimer);
+    noticeTimer = setTimeout(() => { $("notice").hidden = true; }, 4000);
+  }
+
   function tap(sideName, delta) {
     if (!canScore || access !== "approved") return;
     send("api/tap", { side: sideName, delta });
@@ -454,6 +476,7 @@
 
   function render(state) {
     $("heading").textContent = state.heading;
+    $("pace").textContent = state.pace || "";
 
     game = state.game || "-";
     canScore = !!state.canScore;
@@ -465,17 +488,54 @@
 
     renderSetup(state);
 
+    // Singles and doubles have no schedule left to play, so no Possible.
     const leaders = $("leaders");
+    const possible = state.leaders.some((row) => row.possible !== null);
+    $("possibleHead").hidden = !possible;
     leaders.textContent = "";
     for (const row of state.leaders) {
       const tr = document.createElement("tr");
-      tr.innerHTML = "<td></td><td class='num'></td><td class='num'></td>";
+      tr.innerHTML = "<td></td><td class='num'></td><td class='num'></td><td class='num'></td>";
       tr.children[0].textContent = row.name;
       tr.children[1].textContent = row.wins + "/" + row.played;
       tr.children[2].textContent = row.possible;
+      tr.children[2].hidden = !possible;
+      tr.children[3].textContent = row.racksWon + "-" + row.racksLost;
       leaders.append(tr);
     }
     $("leaderSection").hidden = state.leaders.length === 0;
+
+    const history = $("history");
+    history.textContent = "";
+    for (const played of state.history || []) {
+      const tr = document.createElement("tr");
+
+      const number = document.createElement("td");
+      number.className = "set";
+      number.textContent = played.number;
+
+      const who = document.createElement("td");
+      const home = document.createElement("div");
+      home.textContent = (played.winner === "home" ? "• " : "") + played.home;
+      const vs = document.createElement("div");
+      vs.className = "vs";
+      vs.textContent = "v";
+      const away = document.createElement("div");
+      away.textContent = (played.winner === "away" ? "• " : "") + played.away;
+      who.append(home, vs, away);
+
+      const result = document.createElement("td");
+      result.className = "num";
+      result.textContent = played.score;
+      const took = document.createElement("div");
+      took.className = "took";
+      took.textContent = (played.time ? played.time + " · " : "") + played.finished;
+      result.append(took);
+
+      tr.append(number, who, result);
+      history.append(tr);
+    }
+    $("historySection").hidden = !(state.history && state.history.length);
 
     const upcoming = $("upcoming");
     upcoming.textContent = "";
@@ -507,6 +567,12 @@
       const result = document.createElement("td");
       result.className = "num";
       result.textContent = match.score || (match.status === "current" ? "now" : "");
+      if (match.time) {
+        const took = document.createElement("div");
+        took.className = "took";
+        took.textContent = match.time;
+        result.append(took);
+      }
 
       tr.append(set, who, result);
       upcoming.append(tr);
@@ -544,6 +610,11 @@
     source.addEventListener("access", (event) => {
       heard();
       setAccess(JSON.parse(event.data).status);
+    });
+
+    source.addEventListener("notice", (event) => {
+      heard();
+      notice(JSON.parse(event.data).message);
     });
 
     source.addEventListener("state", (event) => {

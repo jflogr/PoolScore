@@ -11,7 +11,11 @@ public sealed record ScoreLine(
     int AwayTarget,
     string? Breaking);
 
-public sealed record LeaderLine(string Name, int Wins, int Played, int Possible);
+/// <summary>Possible is null in singles and doubles, where there is no schedule left to play.</summary>
+public sealed record LeaderLine(string Name, int Wins, int Played, int? Possible, int RacksWon, int RacksLost);
+
+/// <summary>A singles or doubles race already played tonight.</summary>
+public sealed record HistoryLine(int Number, string Home, string Away, string Score, string Winner, string Finished, string? Time);
 
 public sealed record SlotLine(string Label, string? Player);
 
@@ -38,7 +42,8 @@ public sealed record UpcomingLine(
     string? Sitting,
     string Status,
     string? Score,
-    string? BreaksFirst);
+    string? BreaksFirst,
+    string? Time);
 
 /// <summary>
 /// Everything a phone is allowed to see, frozen at one moment. Building it on
@@ -58,11 +63,13 @@ public sealed record Snapshot(
     ScoreLine Score,
     LeaderLine[] Leaders,
     UpcomingLine[] Upcoming,
-    SetupLine? Setup)
+    SetupLine? Setup,
+    string? Pace,
+    HistoryLine[] History)
 {
     public static readonly Snapshot Waiting = new(
         0, "-", "Waiting for the scorer", "-", false,
-        new ScoreLine([], [], 0, 0, 1, 1, null), [], [], null);
+        new ScoreLine([], [], 0, 0, 1, 1, null), [], [], null, null, []);
 
     /// <summary>
     /// Which game is being scored: the set in a round robin, the mode in a
@@ -88,7 +95,8 @@ public sealed record Snapshot(
             view.Breaking?.ToString().ToLowerInvariant());
 
         var leaders = session.Standings()
-            .Select(row => new LeaderLine(row.Name, row.Wins, row.Played, row.Possible))
+            .Select(row => new LeaderLine(
+                row.Name, row.Wins, row.Played, session.IsRoundRobin ? row.Possible : null, row.RacksWon, row.RacksLost))
             .ToArray();
 
         var game = GameFor(session);
@@ -96,7 +104,47 @@ public sealed record Snapshot(
         return new Snapshot(
             rev, session.Config.Key, BuildHeading(session),
             game, game != "-",
-            score, leaders, BuildUpcoming(session), BuildSetup(session));
+            score, leaders, BuildUpcoming(session), BuildSetup(session), BuildPace(session),
+            BuildHistory(session));
+    }
+
+    /// <summary>Newest first, the way the PC lists them.</summary>
+    private static HistoryLine[] BuildHistory(Session session)
+    {
+        if (session.IsRoundRobin) return [];
+
+        return
+        [
+            .. session.Match.History
+                .Select((played, i) => new HistoryLine(
+                    i + 1,
+                    string.Join(" / ", played.HomeNames),
+                    string.Join(" / ", played.AwayNames),
+                    $"{played.Home} - {played.Away}",
+                    played.Winner == Side.Away ? "away" : "home",
+                    Timing.TimeOfDay(played.FinishedAt),
+                    played.Duration is { } length ? Timing.Clock(length) : null))
+                .Reverse()
+        ];
+    }
+
+    /// <summary>
+    /// The average set and the projected finish, as of this snapshot. Phones
+    /// get a fresh one with every rack, which is often enough for a forecast.
+    /// </summary>
+    private static string? BuildPace(Session session)
+    {
+        var pace = session.Pace();
+        if (pace.Average is not { } average) return null;
+
+        if (!session.IsRoundRobin)
+        {
+            var played = session.Match.History.Count;
+            return $"{played} played · average match {Timing.Clock(average)}";
+        }
+
+        var line = $"Average match {Timing.Clock(average)}";
+        return pace.Finish is { } finish ? $"{line} · finish about {Timing.TimeOfDay(finish)}" : line;
     }
 
     private static SetupLine? BuildSetup(Session session)
@@ -123,6 +171,8 @@ public sealed record Snapshot(
     {
         if (!session.IsRoundRobin) return [];
 
+        var now = DateTimeOffset.Now;
+
         return
         [
             .. session.Config.Schedule.Select(match =>
@@ -139,7 +189,8 @@ public sealed record Snapshot(
                     match.Sitting is null ? null : session.NameFor(match.Sitting),
                     line.Committed ? "played" : current ? "current" : "waiting",
                     line.Committed || line.RacksPlayed > 0 ? $"{line.Home} - {line.Away}" : null,
-                    first.ToString().ToLowerInvariant());
+                    first.ToString().ToLowerInvariant(),
+                    line.Committed && line.Duration(now) is { } length ? Timing.Clock(length) : null);
             })
         ];
     }

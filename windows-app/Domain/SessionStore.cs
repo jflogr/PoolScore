@@ -16,6 +16,8 @@ public sealed class ScoreFile
     public bool Committed { get; set; }
     public string? Winner { get; set; }
     public bool BreakSwapped { get; set; }
+    public DateTimeOffset? StartedAt { get; set; }
+    public DateTimeOffset? FinishedAt { get; set; }
 }
 
 /// <summary>
@@ -36,6 +38,23 @@ public sealed class ModeFile
     public int Away { get; set; }
     public string? Winner { get; set; }
     public string BreakSide { get; set; } = "home";
+    public DateTimeOffset? StartedAt { get; set; }
+    public DateTimeOffset? FinishedAt { get; set; }
+    public List<PlayedFile>? History { get; set; }
+}
+
+/// <summary>A won singles or doubles race, kept for the night's history.</summary>
+public sealed class PlayedFile
+{
+    public List<string?> HomeIds { get; set; } = [];
+    public List<string?> AwayIds { get; set; } = [];
+    public List<string> HomeNames { get; set; } = [];
+    public List<string> AwayNames { get; set; } = [];
+    public int Home { get; set; }
+    public int Away { get; set; }
+    public string Winner { get; set; } = "home";
+    public DateTimeOffset? StartedAt { get; set; }
+    public DateTimeOffset? FinishedAt { get; set; }
 }
 
 public sealed class SessionFile

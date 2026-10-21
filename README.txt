@@ -52,11 +52,52 @@ NAMES ON THE SCOREBOARD
   ("Red Devils") rather than people.
 
 -------------------------------------------------------------------
-LEADERBOARD
+PLAYER STATS
 -------------------------------------------------------------------
-Ordered by wins, and deliberately just two numbers per player:
+Ordered by wins, then sets played, then rack difference:
   Wins      - sets won out of sets played
   Possible  - where they would finish if they won every set they have left
+  Games     - racks won-lost across the sets they have played, because a
+              hill-hill win and a 3-0 sweep both count as one set
+
+Singles and doubles (Windows app) keep a history instead of a schedule, for
+nights of several sets:
+- A won race goes into the history when the board is cleared for the next
+  one - New match, Clear scores, or changing a player. A race nobody has won
+  yet is dropped as before.
+- The Player stats tab shows Wins and Games from those races (no Possible -
+  there is nothing scheduled to play), with the history under it: when each
+  finished, the score, the winner marked, and how long it took.
+- The line under the scoreboard gives how many have been played and the
+  average match. "Clear history" on that tab starts the night afresh; the
+  race on the board is left alone. Singles and doubles keep separate
+  histories, and phones see them too.
+
+-------------------------------------------------------------------
+MATCH TIMES (Windows app)
+-------------------------------------------------------------------
+- Each set's clock starts when Next match is pressed on the set before it,
+  or at its first rack if nothing started it (the first set of the night).
+  It stops when the set is committed.
+- The time so far sits at the top of the scoreboard, between the names, and
+  every played set's time is in the Matches tab.
+- A line under the scoreboard gives the average match so far, how many are
+  left, and the projected finish: the rest of the current set at the
+  average, plus an average set for each one still to play. It needs one set
+  played before it has anything to go on. Round robins only - singles and
+  doubles show the average alone (see PLAYER STATS).
+- A long break between sets counts towards the set after it - the clock
+  cannot tell a break from a slow set.
+
+-------------------------------------------------------------------
+NO DOUBLE-SCORING (Windows app)
+-------------------------------------------------------------------
+Once a rack is added, nobody - the PC or any phone - can add another for 5
+seconds. No rack is played that quickly, so a second plus inside it is almost
+always two people scoring the same rack. Whoever was turned away is told who
+just updated the score (on the PC across the scoreboard, on a phone under
+its score). Taking a rack off is never held up, and clears the wait, so
+fixing a tap on the wrong side is instant.
 
 -------------------------------------------------------------------
 TWO WAYS TO RUN IT
@@ -83,7 +124,7 @@ TWO WAYS TO RUN IT
    Reset - called Clear scores in singles and doubles, where there is only
    the one score to clear. Players opens the roster in its own window. Below
    the toolbar are tabs: Match settings, and - in a round robin only - Matches
-   and Leaderboard.
+   and Player stats.
    A one-off match has no schedule and keeps no table, so those two are simply
    not there.
 
@@ -146,14 +187,15 @@ WINDOWS APP - anyone can watch, you choose who scores
 - Nothing to start. The app serves the phone view itself, on port 4174.
 - Scan the QR code down the right of the window, or type the address printed
   under it.
-- Every phone gets the live score, the leaderboard and the full schedule.
+- Every phone gets the live score, the player stats, the full schedule with
+  each played set's time, and the average match and projected finish.
 - To score, a phone types a name and taps "Ask to score". A bar appears under
   the scoreboard on the PC - "Dave wants to score" - with Allow and Deny. It
   never covers the score or takes focus, and the OBS banner never shows it.
   Several asks at once queue up and are answered one at a time.
 - An allowed phone gets a minus and a plus beside each side's score.
 - In singles and doubles an allowed phone can also set each side's race, pick
-  the players and clear the scores - there is no schedule or leaderboard to
+  the players and clear the scores - there is no schedule or player stats to
   show, so the room is there. Changing a player starts the score from 0 - 0,
   as it does at the PC.
 - In a round robin the plus and minus are all a phone gets. The format, the

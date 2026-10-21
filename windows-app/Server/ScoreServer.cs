@@ -15,7 +15,7 @@ using PoolScoreTracker.Domain;
 namespace PoolScoreTracker.Server;
 
 /// <summary>A phone asking for one rack to be added to or taken off a side.</summary>
-public sealed record PhoneTap(string Game, Side Side, int Delta);
+public sealed record PhoneTap(string Key, string Name, string Game, Side Side, int Delta);
 
 public enum SetupChange
 {
@@ -203,6 +203,24 @@ public sealed class ScoreServer : IAsyncDisposable
     }
 
     /// <summary>
+    /// A word for one phone only - a tap turned away because somebody else
+    /// had just scored that rack. Goes down that phone's event stream, the
+    /// same way news of its access does. Safe from any thread.
+    /// </summary>
+    public void Tell(string key, string message)
+    {
+        var frame = Frame("notice", JsonSerializer.Serialize(new { message }, Json));
+
+        lock (_gate)
+        {
+            foreach (var listener in _listeners.Where(item => item.Key == key))
+            {
+                listener.Channel.Writer.TryWrite(frame);
+            }
+        }
+    }
+
+    /// <summary>
     /// A phone asking to score. Files it for the PC to allow or turn down;
     /// the phone hears the answer on its event stream.
     /// </summary>
@@ -254,7 +272,7 @@ public sealed class ScoreServer : IAsyncDisposable
         else if (request.Side == "away") side = Side.Away;
         else return Results.BadRequest();
 
-        Tapped?.Invoke(this, new PhoneTap(request.Game, side, request.Delta));
+        Tapped?.Invoke(this, new PhoneTap(request.Key!, Phones.NameOf(request.Key), request.Game, side, request.Delta));
         return Results.Accepted();
     }
 

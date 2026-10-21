@@ -55,9 +55,12 @@ public sealed class ScoringPanel : Control
     private static readonly Color ButtonHover = ColorTranslator.FromHtml("#4d5f73");
     private static readonly Color Hint = ColorTranslator.FromHtml("#8ea0b4");
     private static readonly Color ActionHover = ColorTranslator.FromHtml("#e8bd67");
+    private static readonly Color NoticeFace = ColorTranslator.FromHtml("#fbf0d9");
 
     private ScoringState _state = ScoringState.Blank;
     private string _actionText = "Next match";
+    private string _clock = string.Empty;
+    private string _notice = string.Empty;
     private Rectangle _homeMinus, _homePlus, _awayMinus, _awayPlus, _action;
     private Rectangle? _hot;
 
@@ -97,6 +100,34 @@ public sealed class ScoringPanel : Control
         {
             if (_actionText == value) return;
             _actionText = value;
+            Invalidate();
+        }
+    }
+
+    /// <summary>How long this match has been going, over the bars. Empty before it starts.</summary>
+    [Browsable(false)]
+    [DesignerSerializationVisibility(DesignerSerializationVisibility.Hidden)]
+    public string Clock
+    {
+        get => _clock;
+        set
+        {
+            if (_clock == value) return;
+            _clock = value;
+            Invalidate();
+        }
+    }
+
+    /// <summary>A short word across the middle - a rack turned away, say. Empty for none.</summary>
+    [Browsable(false)]
+    [DesignerSerializationVisibility(DesignerSerializationVisibility.Hidden)]
+    public string Notice
+    {
+        get => _notice;
+        set
+        {
+            if (_notice == value) return;
+            _notice = value;
             Invalidate();
         }
     }
@@ -153,11 +184,16 @@ public sealed class ScoringPanel : Control
             race: new Rectangle(w - columnWidth + pad, numberTop + numberHeight, columnWidth - pad * 2, raceHeight),
             buttons: new Rectangle(w - columnWidth + pad, buttonTop, columnWidth - pad * 2, buttonHeight));
 
-        // Two narrow bars down the middle, running the whole height.
+        // The match clock heads the middle column. Its row is kept whether or
+        // not the clock is running, so the bars do not jump when it starts.
+        var clockHeight = Math.Clamp((int)(h * 0.07), 14, 34);
+        DrawClock(g, new Rectangle(columnWidth, pad, barArea, clockHeight));
+
+        // Two narrow bars down the middle, running the rest of the height.
         var barGap = Math.Max(4, (int)(w * 0.014));
         var barWidth = (barArea - barGap) / 2;
-        var barTop = pad;
-        var barHeight = h - pad * 2;
+        var barTop = pad + clockHeight + barGap;
+        var barHeight = h - pad - barTop;
 
         DrawBar(g, new Rectangle(columnWidth, barTop, barWidth, barHeight),
                 _state.HomeScore, _state.HomeTarget, _state.HomeWon, _state.HomeOnHill);
@@ -167,6 +203,56 @@ public sealed class ScoringPanel : Control
 
         // Drawn last so it sits over the bars it has to overlap.
         DrawAction(g, w, h);
+        DrawNotice(g, w, h);
+    }
+
+    /// <summary>The match clock, as big as the middle column allows, in the race's grey.</summary>
+    private void DrawClock(Graphics g, Rectangle area)
+    {
+        if (_clock.Length == 0 || area.Width < 20) return;
+
+        using var probe = new Font(FontFamily.GenericSansSerif, 100f, FontStyle.Bold, GraphicsUnit.Pixel);
+        var measured = g.MeasureString(_clock, probe);
+        var size = Math.Min(area.Height * 0.9f, 100f * area.Width * 0.92f / measured.Width);
+
+        using var font = new Font(FontFamily.GenericSansSerif, size, FontStyle.Bold, GraphicsUnit.Pixel);
+        var text = g.MeasureString(_clock, font);
+        using var brush = new SolidBrush(Hint);
+        g.DrawString(_clock, font, brush,
+            area.Left + (area.Width - text.Width) / 2f,
+            area.Top + (area.Height - text.Height) / 2f);
+    }
+
+    /// <summary>
+    /// A pale pill across the middle, clear of the centre button when that is
+    /// showing. Never clickable: it is there to be read, then it goes.
+    /// </summary>
+    private void DrawNotice(Graphics g, int w, int h)
+    {
+        if (_notice.Length == 0) return;
+
+        var size = Math.Clamp(h * 0.045f, 13f, 22f);
+        using var font = new Font(FontFamily.GenericSansSerif, size, FontStyle.Bold, GraphicsUnit.Pixel);
+
+        var padX = size * 1.1f;
+        var padY = size * 0.55f;
+        var maxText = w * 0.86f - padX * 2;
+        var text = g.MeasureString(_notice, font, (int)maxText);
+
+        var box = new RectangleF(0, 0, text.Width + padX * 2, text.Height + padY * 2);
+        box.X = (w - box.Width) / 2f;
+        box.Y = _action.IsEmpty
+            ? (h - box.Height) / 2f
+            : _action.Top - box.Height - _action.Height * 0.4f;
+
+        using var path = RoundedRect(box, box.Height * 0.3f);
+        using var face = new SolidBrush(NoticeFace);
+        g.FillPath(face, path);
+
+        using var ink = new SolidBrush(Ink);
+        using var centred = new StringFormat { Alignment = StringAlignment.Center };
+        g.DrawString(_notice, font, ink,
+            new RectangleF(box.Left + padX, box.Top + padY, box.Width - padX * 2, text.Height + 2), centred);
     }
 
     private void DrawSide(Graphics g, bool isHome, Rectangle column, Rectangle number, Rectangle race, Rectangle buttons)
