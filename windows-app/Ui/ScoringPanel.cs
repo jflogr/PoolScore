@@ -57,10 +57,17 @@ public sealed class ScoringPanel : Control
     private static readonly Color ActionHover = ColorTranslator.FromHtml("#e8bd67");
     private static readonly Color NoticeFace = ColorTranslator.FromHtml("#fbf0d9");
 
+    /// <summary>
+    /// Running long. Orange rather than the gold that means a rack or a race
+    /// is won, so the two never read as each other from across the room.
+    /// </summary>
+    private static readonly Color Overtime = ColorTranslator.FromHtml("#e8743b");
+
     private ScoringState _state = ScoringState.Blank;
     private string _actionText = "Next match";
     private string _clock = string.Empty;
     private string _notice = string.Empty;
+    private bool _runningLong;
     private Rectangle _homeMinus, _homePlus, _awayMinus, _awayPlus, _action;
     private Rectangle? _hot;
 
@@ -117,6 +124,26 @@ public sealed class ScoringPanel : Control
             Invalidate();
         }
     }
+
+    /// <summary>
+    /// The match has gone past the long-match warning: the scoreboard gets an
+    /// orange frame and an orange clock.
+    /// </summary>
+    [Browsable(false)]
+    [DesignerSerializationVisibility(DesignerSerializationVisibility.Hidden)]
+    public bool RunningLong
+    {
+        get => _runningLong;
+        set
+        {
+            if (_runningLong == value) return;
+            _runningLong = value;
+            Invalidate();
+        }
+    }
+
+    /// <summary>Only while the match is still being played - once it is won, it is over.</summary>
+    private bool ShowLong => _runningLong && !_state.Decided;
 
     /// <summary>A short word across the middle - a rack turned away, say. Empty for none.</summary>
     [Browsable(false)]
@@ -204,9 +231,24 @@ public sealed class ScoringPanel : Control
         // Drawn last so it sits over the bars it has to overlap.
         DrawAction(g, w, h);
         DrawNotice(g, w, h);
+        DrawOvertimeFrame(g, w, h, pad);
     }
 
-    /// <summary>The match clock, as big as the middle column allows, in the race's grey.</summary>
+    /// <summary>An orange frame round the whole scoreboard, inside its margin.</summary>
+    private void DrawOvertimeFrame(Graphics g, int w, int h, int pad)
+    {
+        if (!ShowLong) return;
+
+        var thickness = Math.Clamp(h * 0.014f, 4f, 10f);
+        var inset = Math.Max(thickness / 2f + 2f, pad * 0.35f);
+        var frame = new RectangleF(inset, inset, w - inset * 2, h - inset * 2);
+
+        using var path = RoundedRect(frame, Math.Min(w, h) * 0.03f);
+        using var pen = new Pen(Overtime, thickness);
+        g.DrawPath(pen, path);
+    }
+
+    /// <summary>The match clock, as big as the middle column allows: the race's grey, orange once running long.</summary>
     private void DrawClock(Graphics g, Rectangle area)
     {
         if (_clock.Length == 0 || area.Width < 20) return;
@@ -217,7 +259,7 @@ public sealed class ScoringPanel : Control
 
         using var font = new Font(FontFamily.GenericSansSerif, size, FontStyle.Bold, GraphicsUnit.Pixel);
         var text = g.MeasureString(_clock, font);
-        using var brush = new SolidBrush(Hint);
+        using var brush = new SolidBrush(ShowLong ? Overtime : Hint);
         g.DrawString(_clock, font, brush,
             area.Left + (area.Width - text.Width) / 2f,
             area.Top + (area.Height - text.Height) / 2f);

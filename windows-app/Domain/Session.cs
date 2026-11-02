@@ -135,6 +135,14 @@ public sealed class Session
     public BreakRule BreakRule { get; private set; } = BreakRule.Alternate;
     public NameStyle NameStyle { get; private set; } = NameStyle.First;
 
+    /// <summary>
+    /// Minutes after which the match on the table counts as running long and
+    /// the scoreboard says so. 0 turns the warning off.
+    /// </summary>
+    public int LongMatchMinutes { get; private set; } = DefaultLongMatchMinutes;
+
+    public const int DefaultLongMatchMinutes = 25;
+
     public ModeConfig Config => Modes.Get(ModeKey);
     public ModeState Current => _modes[ModeKey];
     public bool IsRoundRobin => Config.Kind == ModeKind.RoundRobin;
@@ -167,7 +175,8 @@ public sealed class Session
             NextRosterId = _nextRosterId,
             Mode = ModeKey,
             BreakRule = BreakRule == BreakRule.Winner ? "winner" : "alternate",
-            NameStyle = NameStyle == NameStyle.Full ? "full" : "first"
+            NameStyle = NameStyle == NameStyle.Full ? "full" : "first",
+            LongMatchMinutes = LongMatchMinutes
         };
 
         foreach (var (key, state) in _modes)
@@ -249,6 +258,9 @@ public sealed class Session
         if (Modes.All.ContainsKey(file.Mode)) session.ModeKey = file.Mode;
         session.BreakRule = file.BreakRule == "winner" ? BreakRule.Winner : BreakRule.Alternate;
         session.NameStyle = file.NameStyle == "full" ? NameStyle.Full : NameStyle.First;
+
+        // Missing from files saved before the warning existed: they get the default.
+        session.LongMatchMinutes = Math.Clamp(file.LongMatchMinutes ?? DefaultLongMatchMinutes, 0, 180);
 
         foreach (var (key, entry) in file.Modes)
         {
@@ -692,6 +704,18 @@ public sealed class Session
         RefreshNames();
         Notify();
     }
+
+    public void SetLongMatchMinutes(int minutes)
+    {
+        var next = Math.Clamp(minutes, 0, 180);
+        if (next == LongMatchMinutes) return;
+        LongMatchMinutes = next;
+        Notify();
+    }
+
+    /// <summary>The match on the table has gone past the long-match warning.</summary>
+    public bool IsRunningLong(Timing pace) =>
+        LongMatchMinutes > 0 && pace.Current is { } length && length >= TimeSpan.FromMinutes(LongMatchMinutes);
 
     /// <summary>
     /// Sets the race. In a round-robin one number covers both sides and any

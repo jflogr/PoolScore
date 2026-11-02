@@ -68,6 +68,9 @@ public sealed class SessionFile
     public string Mode { get; set; } = PoolScoreTracker.Domain.Modes.Doubles5;
     public string BreakRule { get; set; } = "alternate";
     public string NameStyle { get; set; } = "first";
+
+    /// <summary>Null in files from before the warning, so they pick up the default.</summary>
+    public int? LongMatchMinutes { get; set; }
     public Dictionary<string, ModeFile> Modes { get; set; } = [];
 }
 

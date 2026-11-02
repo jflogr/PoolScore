@@ -88,6 +88,12 @@ MATCH TIMES (Windows app)
   doubles show the average alone (see PLAYER STATS).
 - A long break between sets counts towards the set after it - the clock
   cannot tell a break from a slow set.
+- Long match (Match settings, on the right) lights the scoreboard up once a
+  match runs past it: an orange frame round the scoreboard and an orange
+  clock. It goes off as soon as a side wins. Off, or 20 to 45 minutes; 25 to
+  start with. It only warns - the score is never touched, so if the table
+  agrees to cut a long one short (say, play 1-1 as the decider), set the
+  score by hand. The banner never shows it.
 
 -------------------------------------------------------------------
 NO DOUBLE-SCORING (Windows app)

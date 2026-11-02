@@ -53,6 +53,11 @@ public sealed class MainWindow : Form
     private readonly ComboBox _modeBox = new() { DropDownStyle = ComboBoxStyle.DropDownList, Width = 230, Font = new Font(FontFamily.GenericSansSerif, 11f) };
     private readonly ComboBox _breakBox = new() { DropDownStyle = ComboBoxStyle.DropDownList, Width = 230, Font = new Font(FontFamily.GenericSansSerif, 11f) };
     private readonly ComboBox _nameBox = new() { DropDownStyle = ComboBoxStyle.DropDownList, Width = 230, Font = new Font(FontFamily.GenericSansSerif, 11f) };
+    private readonly ComboBox _longBox = new() { DropDownStyle = ComboBoxStyle.DropDownList, Width = 230, Font = new Font(FontFamily.GenericSansSerif, 11f) };
+
+    /// <summary>What the long-match picker offers, in minutes; 0 is off.</summary>
+    private static readonly int[] LongMatchChoices = [0, 20, 25, 30, 35, 40, 45];
+
     private readonly Stepper _raceHome = new();
     private readonly Stepper _raceAway = new();
     private readonly Label _raceHomeLabel = new() { AutoSize = true, Padding = new Padding(0, 8, 0, 0), Font = new Font(FontFamily.GenericSansSerif, 10.5f) };
@@ -744,6 +749,12 @@ public sealed class MainWindow : Form
             if (!_loading) _session.SetNameStyle(_nameBox.SelectedIndex == 1 ? NameStyle.Full : NameStyle.First);
         };
 
+        _longBox.Items.AddRange([.. LongMatchChoices.Select(minutes => (object)(minutes == 0 ? "Off" : $"After {minutes} min"))]);
+        _longBox.SelectedIndexChanged += (_, _) =>
+        {
+            if (!_loading && _longBox.SelectedIndex >= 0) _session.SetLongMatchMinutes(LongMatchChoices[_longBox.SelectedIndex]);
+        };
+
         _raceHome.ValueChanged += (_, _) => { if (!_loading) _session.SetTarget(Side.Home, _raceHome.Value); };
         _raceAway.ValueChanged += (_, _) => { if (!_loading) _session.SetTarget(Side.Away, _raceAway.Value); };
 
@@ -769,6 +780,11 @@ public sealed class MainWindow : Form
 
         right.Controls.Add(Heading("Line-up"));
         right.Controls.Add(_lineup);
+
+        // Lights the scoreboard up once a match runs past it, so the table
+        // can decide whether to cut it short. The score is left to them.
+        right.Controls.Add(Heading("Long match"));
+        right.Controls.Add(_longBox);
 
         split.Controls.Add(left, 0, 0);
         split.Controls.Add(right, 1, 0);
@@ -857,6 +873,7 @@ public sealed class MainWindow : Form
         var clock = pace.Current is { } current ? Timing.Clock(current) : string.Empty;
 
         _scoring.Clock = clock;
+        _scoring.RunningLong = session.IsRunningLong(pace);
         if (_playingRow is not null && _playingRow.SubItems[TimeColumn].Text != clock)
         {
             _playingRow.SubItems[TimeColumn].Text = clock;
@@ -982,6 +999,11 @@ public sealed class MainWindow : Form
         _modeBox.SelectedItem = session.Config;
         _breakBox.SelectedIndex = session.BreakRule == BreakRule.Winner ? 1 : 0;
         _nameBox.SelectedIndex = session.NameStyle == NameStyle.Full ? 1 : 0;
+
+        // A value from a hand-edited file that is not on the list shows as
+        // the nearest choice above it, or the last one.
+        var longIndex = Array.FindIndex(LongMatchChoices, minutes => minutes >= session.LongMatchMinutes);
+        _longBox.SelectedIndex = longIndex >= 0 ? longIndex : LongMatchChoices.Length - 1;
 
         // A round-robin races to one number; a match gives each side its own,
         // which is the whole mechanism behind a handicap.
