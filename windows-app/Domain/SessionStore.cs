@@ -18,6 +18,16 @@ public sealed class ScoreFile
     public bool BreakSwapped { get; set; }
     public DateTimeOffset? StartedAt { get; set; }
     public DateTimeOffset? FinishedAt { get; set; }
+    public List<GameFile>? Games { get; set; }
+    public DateTimeOffset? GameStartedAt { get; set; }
+}
+
+/// <summary>One game won, and when it started and finished.</summary>
+public sealed class GameFile
+{
+    public string Winner { get; set; } = "home";
+    public DateTimeOffset? StartedAt { get; set; }
+    public DateTimeOffset? FinishedAt { get; set; }
 }
 
 /// <summary>
@@ -40,6 +50,8 @@ public sealed class ModeFile
     public string BreakSide { get; set; } = "home";
     public DateTimeOffset? StartedAt { get; set; }
     public DateTimeOffset? FinishedAt { get; set; }
+    public List<GameFile>? Games { get; set; }
+    public DateTimeOffset? GameStartedAt { get; set; }
     public List<PlayedFile>? History { get; set; }
 }
 
@@ -55,6 +67,7 @@ public sealed class PlayedFile
     public string Winner { get; set; } = "home";
     public DateTimeOffset? StartedAt { get; set; }
     public DateTimeOffset? FinishedAt { get; set; }
+    public List<GameFile>? Games { get; set; }
 }
 
 public sealed class SessionFile

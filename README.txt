@@ -95,6 +95,26 @@ MATCH TIMES (Windows app)
   agrees to cut a long one short (say, play 1-1 as the decider), set the
   score by hand. The banner never shows it.
 
+GAME TIMES
+- Every game (rack) is timed too, roughly: from one score change to the
+  next, so it includes racking up. A set's first game starts with Next
+  match (New match in singles and doubles). The first game of the night has
+  nobody to start it, so it has no time - press Restart game clock at the
+  break-off to time it as well.
+- GAME 3:21 under the match clock is the game on the table.
+- Taking a rack off undoes that game, and if it was the one just finished
+  its clock picks up again from when it really started - so a wrong tap put
+  right straight away costs nothing.
+- Restart game clock on the toolbar starts the game on the table again from
+  now, for when a run of taps has left it timing from the wrong moment.
+- The Matches tab lists each set's games under it - the running score, a
+  tick on the side that won it, and how long it took - with the fastest,
+  slowest and average game across the night along the top. Singles and
+  doubles show the same under each race in the History.
+- Phones get it all too: MATCH and GAME clocks along the foot of the score,
+  and the same games, with the winning side's names, under each match or
+  race. Restart game clock stays at the PC.
+
 -------------------------------------------------------------------
 NO DOUBLE-SCORING (Windows app)
 -------------------------------------------------------------------

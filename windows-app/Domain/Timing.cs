@@ -5,7 +5,8 @@ namespace PoolScoreTracker.Domain;
 /// when the last set should finish if the rest go like the ones already
 /// played. Anything the app cannot know yet is null rather than a guess.
 /// </summary>
-public sealed record Timing(TimeSpan? Current, TimeSpan? Average, DateTimeOffset? Finish, int SetsLeft)
+/// <remarks><see cref="Game"/> is the clock on the game - the rack - being played, while one is.</remarks>
+public sealed record Timing(TimeSpan? Current, TimeSpan? Average, DateTimeOffset? Finish, int SetsLeft, TimeSpan? Game = null)
 {
     public static readonly Timing None = new(null, null, null, 0);
 

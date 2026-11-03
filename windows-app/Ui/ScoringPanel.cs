@@ -66,6 +66,7 @@ public sealed class ScoringPanel : Control
     private ScoringState _state = ScoringState.Blank;
     private string _actionText = "Next match";
     private string _clock = string.Empty;
+    private string _gameClock = string.Empty;
     private string _notice = string.Empty;
     private bool _runningLong;
     private Rectangle _homeMinus, _homePlus, _awayMinus, _awayPlus, _action;
@@ -121,6 +122,20 @@ public sealed class ScoringPanel : Control
         {
             if (_clock == value) return;
             _clock = value;
+            Invalidate();
+        }
+    }
+
+    /// <summary>How long the game on the table has been going, under the match clock. Empty for none.</summary>
+    [Browsable(false)]
+    [DesignerSerializationVisibility(DesignerSerializationVisibility.Hidden)]
+    public string GameClock
+    {
+        get => _gameClock;
+        set
+        {
+            if (_gameClock == value) return;
+            _gameClock = value;
             Invalidate();
         }
     }
@@ -211,15 +226,19 @@ public sealed class ScoringPanel : Control
             race: new Rectangle(w - columnWidth + pad, numberTop + numberHeight, columnWidth - pad * 2, raceHeight),
             buttons: new Rectangle(w - columnWidth + pad, buttonTop, columnWidth - pad * 2, buttonHeight));
 
-        // The match clock heads the middle column. Its row is kept whether or
-        // not the clock is running, so the bars do not jump when it starts.
+        // The match clock heads the middle column, the game clock smaller
+        // under it. Their rows are kept whether or not the clocks are running,
+        // so the bars do not jump when one starts.
         var clockHeight = Math.Clamp((int)(h * 0.07), 14, 34);
         DrawClock(g, new Rectangle(columnWidth, pad, barArea, clockHeight));
+
+        var gameHeight = Math.Clamp((int)(h * 0.04), 10, 20);
+        DrawGameClock(g, new Rectangle(columnWidth, pad + clockHeight, barArea, gameHeight));
 
         // Two narrow bars down the middle, running the rest of the height.
         var barGap = Math.Max(4, (int)(w * 0.014));
         var barWidth = (barArea - barGap) / 2;
-        var barTop = pad + clockHeight + barGap;
+        var barTop = pad + clockHeight + gameHeight + barGap;
         var barHeight = h - pad - barTop;
 
         DrawBar(g, new Rectangle(columnWidth, barTop, barWidth, barHeight),
@@ -263,6 +282,24 @@ public sealed class ScoringPanel : Control
         g.DrawString(_clock, font, brush,
             area.Left + (area.Width - text.Width) / 2f,
             area.Top + (area.Height - text.Height) / 2f);
+    }
+
+    /// <summary>The game on the table's clock, labelled so it is never taken for the match's.</summary>
+    private void DrawGameClock(Graphics g, Rectangle area)
+    {
+        if (_gameClock.Length == 0 || area.Width < 20) return;
+
+        var text = $"GAME {_gameClock}";
+        using var probe = new Font(FontFamily.GenericSansSerif, 100f, FontStyle.Bold, GraphicsUnit.Pixel);
+        var measured = g.MeasureString(text, probe);
+        var size = Math.Min(area.Height * 0.85f, 100f * area.Width * 0.9f / measured.Width);
+
+        using var font = new Font(FontFamily.GenericSansSerif, size, FontStyle.Bold, GraphicsUnit.Pixel);
+        var fitted = g.MeasureString(text, font);
+        using var brush = new SolidBrush(Hint);
+        g.DrawString(text, font, brush,
+            area.Left + (area.Width - fitted.Width) / 2f,
+            area.Top + (area.Height - fitted.Height) / 2f);
     }
 
     /// <summary>

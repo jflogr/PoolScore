@@ -14,8 +14,22 @@ public sealed record ScoreLine(
 /// <summary>Possible is null in singles and doubles, where there is no schedule left to play.</summary>
 public sealed record LeaderLine(string Name, int Wins, int Played, int? Possible, int RacksWon, int RacksLost);
 
+/// <summary>One game of a match: who won it, the score after it, and how long it took.</summary>
+public sealed record GameLine(int Number, string Winner, string Score, string? Time);
+
+/// <summary>Fastest, slowest and average game, over the round robin or tonight's races.</summary>
+public sealed record GamesLine(int Timed, string Fastest, string Slowest, string Average);
+
+/// <summary>
+/// The clocks on the table, in seconds as of this snapshot. A phone counts on
+/// from when the snapshot arrived, so its own clock never has to agree with
+/// the PC's.
+/// </summary>
+public sealed record ClockLine(double? Match, double? Game);
+
 /// <summary>A singles or doubles race already played tonight.</summary>
-public sealed record HistoryLine(int Number, string Home, string Away, string Score, string Winner, string Finished, string? Time);
+public sealed record HistoryLine(
+    int Number, string Home, string Away, string Score, string Winner, string Finished, string? Time, GameLine[] Games);
 
 public sealed record SlotLine(string Label, string? Player);
 
@@ -43,7 +57,8 @@ public sealed record UpcomingLine(
     string Status,
     string? Score,
     string? BreaksFirst,
-    string? Time);
+    string? Time,
+    GameLine[] Games);
 
 /// <summary>
 /// Everything a phone is allowed to see, frozen at one moment. Building it on
@@ -65,11 +80,14 @@ public sealed record Snapshot(
     UpcomingLine[] Upcoming,
     SetupLine? Setup,
     string? Pace,
-    HistoryLine[] History)
+    HistoryLine[] History,
+    ClockLine Clocks,
+    GamesLine? GameTimes)
 {
     public static readonly Snapshot Waiting = new(
         0, "-", "Waiting for the scorer", "-", false,
-        new ScoreLine([], [], 0, 0, 1, 1, null), [], [], null, null, []);
+        new ScoreLine([], [], 0, 0, 1, 1, null), [], [], null, null, [],
+        new ClockLine(null, null), null);
 
     /// <summary>
     /// Which game is being scored: the set in a round robin, the mode in a
@@ -105,7 +123,55 @@ public sealed record Snapshot(
             rev, session.Config.Key, BuildHeading(session),
             game, game != "-",
             score, leaders, BuildUpcoming(session), BuildSetup(session), BuildPace(session),
-            BuildHistory(session));
+            BuildHistory(session), BuildClocks(session), BuildGameTimes(session));
+    }
+
+    /// <summary>The match clock while the match is on, and the game clock while a game is.</summary>
+    private static ClockLine BuildClocks(Session session)
+    {
+        var pace = session.Pace();
+        var decided = session.IsRoundRobin
+            ? session.CurrentSet() is not { } current || current.Score.Committed
+            : session.Match.Winner is not null;
+
+        return new ClockLine(
+            decided ? null : pace.Current?.TotalSeconds,
+            pace.Game?.TotalSeconds);
+    }
+
+    private static GamesLine? BuildGameTimes(Session session)
+    {
+        var summary = session.Games();
+        if (summary.Timed == 0) return null;
+
+        return new GamesLine(
+            summary.Timed,
+            Timing.Clock(summary.Fastest!.Value),
+            Timing.Clock(summary.Slowest!.Value),
+            Timing.Clock(summary.Average!.Value));
+    }
+
+    /// <summary>A match's games in order, each with the running score after it.</summary>
+    private static GameLine[] BuildGames(IReadOnlyList<GameTime> games)
+    {
+        var home = 0;
+        var away = 0;
+        var lines = new GameLine[games.Count];
+
+        for (var i = 0; i < games.Count; i++)
+        {
+            var game = games[i];
+            if (game.Winner == Side.Home) home++;
+            else away++;
+
+            lines[i] = new GameLine(
+                i + 1,
+                game.Winner == Side.Away ? "away" : "home",
+                $"{home} - {away}",
+                game.Duration is { } length ? Timing.Clock(length) : null);
+        }
+
+        return lines;
     }
 
     /// <summary>Newest first, the way the PC lists them.</summary>
@@ -123,7 +189,8 @@ public sealed record Snapshot(
                     $"{played.Home} - {played.Away}",
                     played.Winner == Side.Away ? "away" : "home",
                     Timing.TimeOfDay(played.FinishedAt),
-                    played.Duration is { } length ? Timing.Clock(length) : null))
+                    played.Duration is { } length ? Timing.Clock(length) : null,
+                    BuildGames(played.Games)))
                 .Reverse()
         ];
     }
@@ -190,7 +257,8 @@ public sealed record Snapshot(
                     line.Committed ? "played" : current ? "current" : "waiting",
                     line.Committed || line.RacksPlayed > 0 ? $"{line.Home} - {line.Away}" : null,
                     first.ToString().ToLowerInvariant(),
-                    line.Committed && line.Duration(now) is { } length ? Timing.Clock(length) : null);
+                    line.Committed && line.Duration(now) is { } length ? Timing.Clock(length) : null,
+                    BuildGames(line.Games.Played));
             })
         ];
     }

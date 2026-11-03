@@ -29,6 +29,9 @@ public sealed class SetScore(int set)
 
     public DateTimeOffset? FinishedAt { get; set; }
 
+    /// <summary>The set's games in order, and the clock on the one being played.</summary>
+    public GameLog Games { get; } = new();
+
     public int RacksPlayed => Home + Away;
 
     /// <summary>How long the set took, or has taken so far. Null until it starts.</summary>

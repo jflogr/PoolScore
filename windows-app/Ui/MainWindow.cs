@@ -41,6 +41,13 @@ public sealed class MainWindow : Form
     private readonly SplitContainer _statsSplit = new() { Orientation = Orientation.Horizontal };
     private readonly ListView _matches = NewList();
 
+    // Fastest, slowest and average game, over the Matches list and the history.
+    private readonly Label _matchesSummary = SummaryLine();
+    private readonly Label _historySummary = SummaryLine();
+
+    /// <summary>The games under a match are greyed, so the matches still read as the list.</summary>
+    private static readonly Color GameRow = ColorTranslator.FromHtml("#6b7a8c");
+
     /// <summary>The Matches row being played, so the clock can tick in it without a refill.</summary>
     private ListViewItem? _playingRow;
     private const int TimeColumn = 7;
@@ -435,6 +442,7 @@ public sealed class MainWindow : Form
 
         _commands.Items.Add(Command("Players", Icons.Group, icon, ShowPlayers));
         _commands.Items.Add(Command("Swap break", Icons.SwapHoriz, icon, _session.SwapBreak));
+        _commands.Items.Add(Command("Restart game clock", Icons.Timer, icon, _session.RestartGameClock));
         _reset = Command("Reset", Icons.RestartAlt, icon, ResetScores);
         _commands.Items.Add(_reset);
         _commands.Items.Add(_undo);
@@ -625,7 +633,7 @@ public sealed class MainWindow : Form
         _tabs.Font = new Font(FontFamily.GenericSansSerif, 11f);
 
         _settingsPage = Page("Match settings", BuildSettingsTab());
-        _matchesPage = Page("Matches", _matches);
+        _matchesPage = Page("Matches", WithSummary(_matches, _matchesSummary));
         _leaderboardPage = Page("Player stats", BuildStatsTab());
 
         // The last two only mean anything in a round robin; SyncTabs takes
@@ -692,9 +700,56 @@ public sealed class MainWindow : Form
 
         _statsSplit.Panel1.Controls.Add(_leaders);
         _statsSplit.Panel2.Controls.Add(_history);
+        _statsSplit.Panel2.Controls.Add(_historySummary);
         _statsSplit.Panel2.Controls.Add(bar);
         _statsSplit.SizeChanged += (_, _) => KeepStatsSplit();
         return _statsSplit;
+    }
+
+    private static Label SummaryLine() => new()
+    {
+        Dock = DockStyle.Top,
+        Height = 30,
+        TextAlign = ContentAlignment.MiddleLeft,
+        AutoEllipsis = true,
+        ForeColor = Ink,
+        Font = new Font(FontFamily.GenericSansSerif, 10.5f)
+    };
+
+    private static Control WithSummary(Control list, Label summary)
+    {
+        var panel = new Panel();
+        list.Dock = DockStyle.Fill;
+        panel.Controls.Add(list);
+        panel.Controls.Add(summary);
+        return panel;
+    }
+
+    /// <summary>
+    /// A match's games under it, one a row: the running score, a tick on the
+    /// side that won that game, and how long it took. Laid out in whichever
+    /// columns the list has for the two sides, the score and the time.
+    /// </summary>
+    private static IEnumerable<ListViewItem> GameRows(
+        IReadOnlyList<GameTime> games, int columns, int homeColumn, int scoreColumn, int awayColumn, int timeColumn)
+    {
+        var home = 0;
+        var away = 0;
+
+        for (var i = 0; i < games.Count; i++)
+        {
+            var game = games[i];
+            if (game.Winner == Side.Home) home++;
+            else away++;
+
+            var cells = Enumerable.Repeat(string.Empty, columns).ToArray();
+            cells[homeColumn] = $"      Game {i + 1}" + (game.Winner == Side.Home ? "   ✓" : string.Empty);
+            cells[scoreColumn] = $"{home} - {away}";
+            cells[awayColumn] = game.Winner == Side.Away ? "  ✓" : string.Empty;
+            cells[timeColumn] = game.Duration is { } length ? Timing.Clock(length) : "-";
+
+            yield return new ListViewItem(cells) { ForeColor = GameRow };
+        }
     }
 
     /// <summary>Stats over history about 40/60, whatever the window size.</summary>
@@ -873,6 +928,7 @@ public sealed class MainWindow : Form
         var clock = pace.Current is { } current ? Timing.Clock(current) : string.Empty;
 
         _scoring.Clock = clock;
+        _scoring.GameClock = pace.Game is { } game ? Timing.Clock(game) : string.Empty;
         _scoring.RunningLong = session.IsRunningLong(pace);
         if (_playingRow is not null && _playingRow.SubItems[TimeColumn].Text != clock)
         {
@@ -1139,7 +1195,11 @@ public sealed class MainWindow : Form
                     away,
                     played.Duration is { } length ? Timing.Clock(length) : "-"
                 ]));
+
+                foreach (var row in GameRows(played.Games, 6, 2, 3, 4, 5)) _history.Items.Add(row);
             }
+
+            _historySummary.Text = session.Games().Describe();
         }
 
         _history.EndUpdate();
@@ -1187,8 +1247,10 @@ public sealed class MainWindow : Form
             }
 
             _matches.Items.Add(item);
+            foreach (var row in GameRows(score.Games.Played, 8, 2, 3, 4, TimeColumn)) _matches.Items.Add(row);
         }
 
+        _matchesSummary.Text = session.Games().Describe();
         _matches.EndUpdate();
     }
 

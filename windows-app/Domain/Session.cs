@@ -39,6 +39,9 @@ public sealed class MatchState : ModeState
     /// <summary>Races already won and cleared away, oldest first - a night of several sets.</summary>
     public List<PlayedMatch> History { get; init; } = [];
 
+    /// <summary>The games of the race on the board, and the clock on the one being played.</summary>
+    public GameLog Games { get; } = new();
+
     public int RacksPlayed => Home + Away;
 }
 
@@ -56,7 +59,8 @@ public sealed record PlayedMatch(
     int Away,
     Side Winner,
     DateTimeOffset? StartedAt,
-    DateTimeOffset FinishedAt)
+    DateTimeOffset FinishedAt,
+    GameTime[] Games)
 {
     public TimeSpan? Duration => Timing.Between(StartedAt, FinishedAt, FinishedAt);
 }
@@ -198,7 +202,9 @@ public sealed class Session
                         Winner = score.Winner?.ToString().ToLowerInvariant(),
                         BreakSwapped = score.BreakSwapped,
                         StartedAt = score.StartedAt,
-                        FinishedAt = score.FinishedAt
+                        FinishedAt = score.FinishedAt,
+                        Games = ToFile(score.Games.Played),
+                        GameStartedAt = score.Games.CurrentStartedAt
                     })
                 ];
             }
@@ -212,6 +218,8 @@ public sealed class Session
                 entry.BreakSide = match.BreakSide == Side.Away ? "away" : "home";
                 entry.StartedAt = match.StartedAt;
                 entry.FinishedAt = match.FinishedAt;
+                entry.Games = ToFile(match.Games.Played);
+                entry.GameStartedAt = match.Games.CurrentStartedAt;
                 entry.History =
                 [
                     .. match.History.Select(played => new PlayedFile
@@ -224,7 +232,8 @@ public sealed class Session
                         Away = played.Away,
                         Winner = played.Winner == Side.Away ? "away" : "home",
                         StartedAt = played.StartedAt,
-                        FinishedAt = played.FinishedAt
+                        FinishedAt = played.FinishedAt,
+                        Games = ToFile(played.Games)
                     })
                 ];
             }
@@ -234,6 +243,21 @@ public sealed class Session
 
         return file;
     }
+
+    private static List<GameFile> ToFile(IEnumerable<GameTime> games) =>
+    [
+        .. games.Select(game => new GameFile
+        {
+            Winner = game.Winner == Side.Away ? "away" : "home",
+            StartedAt = game.StartedAt,
+            FinishedAt = game.FinishedAt
+        })
+    ];
+
+    private static IEnumerable<GameTime> FromFile(IEnumerable<GameFile>? games) =>
+        (games ?? [])
+            .Where(game => game.FinishedAt is not null)
+            .Select(game => new GameTime(game.Winner == "away" ? Side.Away : Side.Home, game.StartedAt, game.FinishedAt!.Value));
 
     /// <summary>
     /// Rebuilds a session from a saved file. Anything missing or unrecognised
@@ -288,6 +312,8 @@ public sealed class Session
                     score.BreakSwapped = saved.BreakSwapped;
                     score.StartedAt = saved.StartedAt;
                     score.FinishedAt = saved.FinishedAt;
+                    score.Games.Played.AddRange(FromFile(saved.Games));
+                    score.Games.CurrentStartedAt = saved.GameStartedAt;
                 }
             }
             else if (state is MatchState match)
@@ -300,6 +326,8 @@ public sealed class Session
                 match.BreakSide = entry.BreakSide == "away" ? Side.Away : Side.Home;
                 match.StartedAt = entry.StartedAt;
                 match.FinishedAt = entry.FinishedAt;
+                match.Games.Played.AddRange(FromFile(entry.Games));
+                match.Games.CurrentStartedAt = entry.GameStartedAt;
 
                 match.History.Clear();
                 foreach (var saved in entry.History ?? [])
@@ -311,7 +339,7 @@ public sealed class Session
                         [.. saved.HomeNames], [.. saved.AwayNames],
                         Math.Max(0, saved.Home), Math.Max(0, saved.Away),
                         saved.Winner == "away" ? Side.Away : Side.Home,
-                        saved.StartedAt, finished));
+                        saved.StartedAt, finished, [.. FromFile(saved.Games)]));
                 }
             }
         }
@@ -368,7 +396,8 @@ public sealed class Session
         {
             var lengths = Match.History.Select(played => played.Duration).OfType<TimeSpan>().ToList();
             TimeSpan? usualRace = lengths.Count > 0 ? TimeSpan.FromTicks((long)lengths.Average(length => length.Ticks)) : null;
-            return new Timing(Timing.Between(Match.StartedAt, Match.FinishedAt, now), usualRace, null, 0);
+            var game = Match.Winner is null ? Match.Games.Current(now) : null;
+            return new Timing(Timing.Between(Match.StartedAt, Match.FinishedAt, now), usualRace, null, 0, game);
         }
 
         var scores = RoundRobin.Scores;
@@ -389,8 +418,42 @@ public sealed class Session
             finish = now + rest + usual * (left - 1);
         }
 
-        return new Timing(elapsed, average, finish, left);
+        // No game is being played once a side is over the line.
+        TimeSpan? onTable = null;
+        if (CurrentSet() is { } current && Math.Max(current.Score.Home, current.Score.Away) < RoundRobin.Target)
+        {
+            onTable = current.Score.Games.Current(now);
+        }
+
+        return new Timing(elapsed, average, finish, left, onTable);
     }
+
+    /// <summary>The games log being added to now: the set on the table, or the race on the board.</summary>
+    private GameLog? LiveGames() =>
+        IsRoundRobin
+            ? CurrentSet() is { } current && !current.Score.Committed ? current.Score.Games : null
+            : Match.Games;
+
+    /// <summary>
+    /// Starts the clock on the game being played again from now - for when a
+    /// run of taps has left it timing from the wrong moment.
+    /// </summary>
+    public void RestartGameClock()
+    {
+        if (LiveGames() is not { } games) return;
+
+        games.CurrentStartedAt = Now;
+        Notify();
+    }
+
+    /// <summary>
+    /// Fastest, slowest and average game: across the round robin's sets, or
+    /// tonight's singles or doubles races including the one on the board.
+    /// </summary>
+    public GameSummary Games() =>
+        GameSummary.Of(IsRoundRobin
+            ? RoundRobin.Scores.SelectMany(score => score.Games.Played)
+            : Match.History.SelectMany(played => played.Games).Concat(Match.Games.Played));
 
     /// <summary>Who breaks the rack about to be played, if the app can know.</summary>
     public Side? BreakingNext()
@@ -475,6 +538,7 @@ public sealed class Session
             else score.Away = after;
 
             score.StartedAt ??= now;
+            Log(score.Games, side, after > before, now);
         }
         else
         {
@@ -487,11 +551,18 @@ public sealed class Session
             else Match.Away = after;
 
             Match.StartedAt ??= now;
+            Log(Match.Games, side, after > before, now);
             RefreshMatchWinner();
         }
 
         Notify();
         return null;
+    }
+
+    private static void Log(GameLog games, Side side, bool won, DateTimeOffset now)
+    {
+        if (won) games.Won(side, now);
+        else games.TakeBack(side);
     }
 
     /// <summary>Turns away a rack that follows the last one too closely, else records it.</summary>
@@ -548,8 +619,13 @@ public sealed class Session
                    ?? RoundRobin.Scores.FirstOrDefault(item => !item.Committed);
         RoundRobin.CurrentSet = next?.Set;
 
-        // Next match is pressed as the next pair step up, so their clock starts now.
-        if (next is not null) next.StartedAt ??= now;
+        // Next match is pressed as the next pair step up, so their clock
+        // starts now - and so does the one on their first game.
+        if (next is not null)
+        {
+            next.StartedAt ??= now;
+            if (next.RacksPlayed == 0) next.Games.CurrentStartedAt ??= now;
+        }
 
         Notify();
         return true;
@@ -563,7 +639,11 @@ public sealed class Session
         if (last is null) return;
 
         // The set it moved on to never got going, so its clock goes too.
-        if (CurrentSet() is { } current && current.Score.RacksPlayed == 0) current.Score.StartedAt = null;
+        if (CurrentSet() is { } current && current.Score.RacksPlayed == 0)
+        {
+            current.Score.StartedAt = null;
+            current.Score.Games.Clear();
+        }
 
         last.Committed = false;
         last.Winner = null;
@@ -591,6 +671,7 @@ public sealed class Session
                 score.BreakSwapped = false;
                 score.StartedAt = null;
                 score.FinishedAt = null;
+                score.Games.Clear();
             }
 
             RoundRobin.CurrentSet = Config.Schedule.FirstOrDefault()?.Set;
@@ -613,8 +694,10 @@ public sealed class Session
         RecordMatch();
         ClearMatch();
 
-        // Pressed as the next race steps up to the table, so it is on the clock.
+        // Pressed as the next race steps up to the table, so it - and its
+        // first game - are on the clock.
         Match.StartedAt = Now;
+        Match.Games.CurrentStartedAt = Match.StartedAt;
         _lastRack = null;
 
         Notify();
@@ -637,7 +720,8 @@ public sealed class Session
             [.. lineup.Take(size)], [.. lineup.Skip(size).Take(size)],
             view.HomeNames, view.AwayNames,
             Match.Home, Match.Away, winner,
-            Match.StartedAt, Match.FinishedAt ?? Now));
+            Match.StartedAt, Match.FinishedAt ?? Now,
+            [.. Match.Games.Played]));
     }
 
     /// <summary>Forgets tonight's singles or doubles races. The one on the board is left alone.</summary>
@@ -656,6 +740,7 @@ public sealed class Session
         Match.Winner = null;
         Match.StartedAt = null;
         Match.FinishedAt = null;
+        Match.Games.Clear();
     }
 
     /// <summary>
@@ -735,6 +820,8 @@ public sealed class Session
             {
                 score.Home = Math.Clamp(score.Home, 0, next);
                 score.Away = Math.Clamp(score.Away, 0, next);
+                score.Games.Trim(Side.Home, score.Home);
+                score.Games.Trim(Side.Away, score.Away);
             }
         }
         else
@@ -744,12 +831,14 @@ public sealed class Session
                 if (next == Match.TargetHome) return;
                 Match.TargetHome = next;
                 Match.Home = Math.Clamp(Match.Home, 0, next);
+                Match.Games.Trim(Side.Home, Match.Home);
             }
             else
             {
                 if (next == Match.TargetAway) return;
                 Match.TargetAway = next;
                 Match.Away = Math.Clamp(Match.Away, 0, next);
+                Match.Games.Trim(Side.Away, Match.Away);
             }
 
             RefreshMatchWinner();

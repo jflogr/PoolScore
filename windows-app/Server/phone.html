@@ -71,6 +71,24 @@
   tr.played td { color: var(--muted); }
   .set { color: var(--muted); font-variant-numeric: tabular-nums; padding-right: 10px; }
   .took { color: var(--muted); font-size: 0.8rem; }
+
+  /* the clocks on the table, along the foot of the score */
+  .clocks { display: flex; justify-content: center; gap: 22px; padding: 0 16px 12px; background: var(--ink);
+            color: var(--muted); font-size: 0.78rem; font-weight: 700; letter-spacing: 0.08em;
+            font-variant-numeric: tabular-nums; }
+  .clocks[hidden] { display: none; }
+  .clocks b { color: var(--paper); font-weight: 700; margin-left: 6px; letter-spacing: 0.02em; font-size: 0.95rem; }
+
+  /* fastest, slowest and average game, under a list's heading */
+  .gamesum { margin: -4px 0 10px; color: var(--muted); font-size: 0.8rem; }
+  .gamesum:empty { display: none; }
+
+  /* a match's games, one a row under it, quieter than the match itself */
+  tr.game td { border-top: 0; padding: 1px 0 3px; font-size: 0.84rem; color: var(--muted); }
+  tr.game td.num { white-space: nowrap; }
+  tr.game .gno { display: inline-block; min-width: 4.2em; }
+  tr.game .took { margin-left: 8px; }
+  tr.game + tr:not(.game) td { padding-top: 9px; }
   .vs { color: var(--muted); font-size: 0.85rem; }
   .sitting { color: var(--muted); font-size: 0.82rem; }
 
@@ -155,6 +173,11 @@
     </div>
   </div>
 
+  <div class="clocks" id="clocks" hidden>
+    <span id="matchClockWrap">MATCH<b id="matchClock"></b></span>
+    <span id="gameClockWrap">GAME<b id="gameClock"></b></span>
+  </div>
+
   <p class="notice" id="notice" hidden></p>
 
   <div class="access">
@@ -206,11 +229,13 @@
 
   <section id="historySection" hidden>
     <h2>History</h2>
+    <p class="gamesum" id="historyGames"></p>
     <table><tbody id="history"></tbody></table>
   </section>
 
   <section id="upcomingSection" hidden>
     <h2>Matches</h2>
+    <p class="gamesum" id="matchGames"></p>
     <table><tbody id="upcoming"></tbody></table>
   </section>
 
@@ -474,6 +499,70 @@
   $("awayMinus").addEventListener("click", () => tap("away", -1));
   $("awayPlus").addEventListener("click", () => tap("away", 1));
 
+  // ---- clocks ------------------------------------------------------------
+  // The PC sends how far each clock had got when the snapshot was made; the
+  // page counts on from when it arrived, so it never has to trust its own
+  // idea of the time against the PC's.
+  let clocks = { match: null, game: null };
+  let clocksAt = 0;
+
+  function clock(seconds) {
+    const total = Math.max(0, Math.floor(seconds));
+    const h = Math.floor(total / 3600);
+    const m = Math.floor((total % 3600) / 60);
+    const s = String(total % 60).padStart(2, "0");
+    return h > 0 ? h + ":" + String(m).padStart(2, "0") + ":" + s : m + ":" + s;
+  }
+
+  function tickClocks() {
+    const gone = (Date.now() - clocksAt) / 1000;
+    const showMatch = clocks.match !== null;
+    const showGame = clocks.game !== null;
+    $("clocks").hidden = !showMatch && !showGame;
+    $("matchClockWrap").hidden = !showMatch;
+    $("gameClockWrap").hidden = !showGame;
+    if (showMatch) $("matchClock").textContent = clock(clocks.match + gone);
+    if (showGame) $("gameClock").textContent = clock(clocks.game + gone);
+  }
+
+  setInterval(tickClocks, 1000);
+
+  function gameSummary(into, times) {
+    into.textContent = times
+      ? "Games \u00b7 fastest " + times.fastest + " \u00b7 slowest " + times.slowest +
+        " \u00b7 average " + times.average + " \u00b7 " + times.timed + " timed"
+      : "";
+  }
+
+  // A match's games under it: the game, who won it, the score after it and
+  // how long it took.
+  function gameRows(into, games, home, away, status) {
+    for (const game of games || []) {
+      const tr = document.createElement("tr");
+      // The set being played keeps its highlight down through its games.
+      tr.className = status === "current" ? "game current" : "game";
+
+      const blank = document.createElement("td");
+
+      const who = document.createElement("td");
+      const number = document.createElement("span");
+      number.className = "gno";
+      number.textContent = "Game " + game.number;
+      who.append(number, game.winner === "home" ? home : away);
+
+      const result = document.createElement("td");
+      result.className = "num";
+      result.textContent = game.score;
+      const took = document.createElement("span");
+      took.className = "took";
+      took.textContent = game.time || "-";
+      result.append(took);
+
+      tr.append(blank, who, result);
+      into.append(tr);
+    }
+  }
+
   function render(state) {
     $("heading").textContent = state.heading;
     $("pace").textContent = state.pace || "";
@@ -487,6 +576,10 @@
     side("away", s.away, s.awayScore, s.awayTarget, s.breaking === "away");
 
     renderSetup(state);
+
+    clocks = state.clocks || { match: null, game: null };
+    clocksAt = Date.now();
+    tickClocks();
 
     // Singles and doubles have no schedule left to play, so no Possible.
     const leaders = $("leaders");
@@ -534,7 +627,9 @@
 
       tr.append(number, who, result);
       history.append(tr);
+      gameRows(history, played.games, played.home, played.away);
     }
+    gameSummary($("historyGames"), state.gameTimes);
     $("historySection").hidden = !(state.history && state.history.length);
 
     const upcoming = $("upcoming");
@@ -576,7 +671,9 @@
 
       tr.append(set, who, result);
       upcoming.append(tr);
+      gameRows(upcoming, match.games, match.home, match.away, match.status);
     }
+    gameSummary($("matchGames"), state.upcoming.length ? state.gameTimes : null);
     $("upcomingSection").hidden = state.upcoming.length === 0;
   }
 
