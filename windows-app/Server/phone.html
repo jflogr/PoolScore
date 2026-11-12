@@ -45,6 +45,17 @@
   .names { max-width: 100%; display: flex; align-items: center; gap: 6px; font-size: 1.2rem; font-weight: 700; line-height: 1.15; }
   .names .stack { min-width: 0; }
   .names span { display: block; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  /* whoever is at the table stays bright; everyone waiting is dimmed */
+  .names span.waiting { color: #6f8195; }
+
+  /* turn over and push reverse - allowed phones only */
+  .turns { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; padding: 0 16px 12px; background: var(--ink); }
+  .turns[hidden] { display: none; }
+  .turns button {
+    height: 46px; border-radius: 12px; border: 1px solid var(--line); background: var(--deep); color: var(--paper);
+    font: 700 1rem system-ui, sans-serif; touch-action: manipulation; -webkit-tap-highlight-color: transparent;
+  }
+  .turns button:active { background: var(--gold); color: var(--deep); }
 
   .tally { margin: 6px 0 10px; font-size: 3.6rem; font-weight: 800; line-height: 1.05; font-variant-numeric: tabular-nums; }
   .lit .tally, .lit .names { color: var(--gold); }
@@ -183,6 +194,11 @@
     </div>
   </div>
 
+  <div class="turns" id="turnsBar" hidden>
+    <button type="button" id="turnOver">Turn over</button>
+    <button type="button" id="pushBack">Push reverse</button>
+  </div>
+
   <div class="centre" id="centreBar" hidden>
     <button type="button" id="centreButton">Start</button>
   </div>
@@ -260,13 +276,18 @@
 
   const $ = (id) => document.getElementById(id);
 
-  function names(into, list) {
+  // The shooter, as the PC sends it, or null when nobody is up.
+  let shooter = null;
+
+  function names(into, list, sideName) {
     into.textContent = "";
-    for (const name of list) {
+    list.forEach((name, index) => {
       const line = document.createElement("span");
       line.textContent = name;
+      const up = shooter && shooter.side === sideName && shooter.index === index;
+      if (shooter && !up) line.className = "waiting";
       into.append(line);
-    }
+    });
   }
 
   // One box per rack in the race. With a handicap the two sides have different
@@ -360,6 +381,7 @@
     $("score").classList.toggle("viewonly", !live);
     $("setupSection").hidden = !(access === "approved" && setup);
     $("centreBar").hidden = !(access === "approved" && centre);
+    $("turnsBar").hidden = !(access === "approved" && canScore && shooter);
     if (centre) $("centreButton").textContent = centre;
   }
 
@@ -386,7 +408,7 @@
     const won = score >= target;
     const onHill = !won && score === target - 1;
 
-    names($(prefix + "Names"), list);
+    names($(prefix + "Names"), list, prefix);
     $(prefix + "Score").textContent = score;
     bar($(prefix + "Bar"), score, target);
     $(prefix + "Dot").classList.toggle("off", !breaking);
@@ -454,6 +476,14 @@
 
   // Any format. The PC does only what its own button says at that moment,
   // so a tap that lands late cannot start or end the wrong thing.
+  $("turnOver").addEventListener("click", () => {
+    if (access === "approved" && shooter) send("api/setup", { change: "turn" });
+  });
+
+  $("pushBack").addEventListener("click", () => {
+    if (access === "approved" && shooter) send("api/setup", { change: "pushback" });
+  });
+
   $("centreButton").addEventListener("click", () => {
     if (access !== "approved" || !centre) return;
     send("api/setup", { change: "centre" });
@@ -601,6 +631,8 @@
     showButtons();
 
     const s = state.score;
+    shooter = s.shooter || null;
+    showButtons();
     side("home", s.home, s.homeScore, s.homeTarget, s.breaking === "home");
     side("away", s.away, s.awayScore, s.awayTarget, s.breaking === "away");
 

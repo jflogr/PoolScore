@@ -111,7 +111,7 @@ GAME TIMES
 - Taking a rack off undoes that game, and if it was the one just finished
   its clock picks up again from when it really started - so a wrong tap put
   right straight away costs nothing.
-- Restart game clock on the toolbar starts the game on the table again from
+- Restart game clock on the Play tab starts the game on the table again from
   now, for when a run of taps has left it timing from the wrong moment.
 - The Matches tab lists each set's games under it - the running score, a
   tick on the side that won it, and how long it took - with the fastest,
@@ -120,6 +120,28 @@ GAME TIMES
 - Phones get it all too: MATCH and GAME clocks along the foot of the score,
   and the same games, with the winning side's names, under each match or
   race. Allowed phones can press Start; Restart game clock stays at the PC.
+
+-------------------------------------------------------------------
+SHOOTING ORDER (Windows app)
+-------------------------------------------------------------------
+The app keeps track of who is at the table. Their name stays bright on the
+scoreboard, the banner and phones; everyone waiting is dimmed.
+
+- Play tab > Shooting order for this match: who breaks, and - in doubles -
+  who shoots after them. The rest follows: breaker, next, breaker's partner,
+  next's partner, and round again. Out of the box it is the first player of the
+  side breaking, then the first player of the other side. Picking a breaker
+  from the other side before the first rack takes the break across too.
+- ENTER (or Turn over on the Play tab, or on an allowed phone) is a miss: the
+  next player in the order is up. A pocketed ball needs nothing pressed -
+  the same player carries on.
+- Push reverse (Play tab or phone) steps the turn back one, for when the
+  other side puts a pusher back in.
+- Each new rack is broken by the next player in the order from the side
+  breaking it, so partners take turns to break. Under winner breaks, the
+  side that took the rack breaks. Taking a rack off steps it back.
+- Nothing here watches the table yet: the order only moves when somebody
+  says so. A camera-driven shot clock is planned to plug into it.
 
 -------------------------------------------------------------------
 NO DOUBLE-SCORING (Windows app)
@@ -159,13 +181,21 @@ TWO WAYS TO RUN IT
    match (it puts the match and its first game on the clock), then Next match
    - New match in singles and doubles - once a side has won.
 
-   A toolbar under that has Commit, Undo last, Swap break, Players, Banner and
-   Reset - called Clear scores in singles and doubles, where there is only
-   the one score to clear. Players opens the roster in its own window. Below
-   the toolbar are tabs: Match settings, and - in a round robin only - Matches
-   and Player stats.
-   A one-off match has no schedule and keeps no table, so those two are simply
-   not there.
+   ENTER passes the turn on a miss - see SHOOTING ORDER below.
+
+   The toolbar at the top has Players (the roster, in its own window),
+   Previous match (round robin undo) and Banner. Below the scoreboard are
+   tabs, in the order you need them:
+     Play            - opens first. Everything used during play: who is
+                       shooting (large) and who is next, and big buttons for
+                       Turn over, Push reverse, Restart game clock, Swap break
+                       and Reset (called Clear scores in singles and doubles,
+                       where there is only the one score to clear - it always
+                       asks first). Under them, this match's shooting order.
+     Matches         - round robins only: the schedule, with each set's games.
+     Player stats    - the stats, and in singles and doubles the history.
+     Match settings  - set once a night: format, race, break rule, names,
+                       the line-up and Long match.
 
    "Banner" opens a separate fixed-size window with just the score line in it -
    that is the one to point OBS at (see STREAMING below).

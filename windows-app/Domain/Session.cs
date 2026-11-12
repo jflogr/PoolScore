@@ -42,6 +42,9 @@ public sealed class MatchState : ModeState
     /// <summary>The games of the race on the board, and the clock on the one being played.</summary>
     public GameLog Games { get; } = new();
 
+    /// <summary>Who is at the table in the race on the board.</summary>
+    public ShootingOrder Turns { get; } = new();
+
     public int RacksPlayed => Home + Away;
 }
 
@@ -95,7 +98,8 @@ public sealed record ScoreView(
     int AwayScore,
     int HomeTarget,
     int AwayTarget,
-    Side? Breaking);
+    Side? Breaking,
+    Seat? Shooter = null);
 
 /// <summary>
 /// The live session: who is playing, what has been scored, and the operations
@@ -205,7 +209,8 @@ public sealed class Session
                         StartedAt = score.StartedAt,
                         FinishedAt = score.FinishedAt,
                         Games = ToFile(score.Games.Played),
-                        GameStartedAt = score.Games.CurrentStartedAt
+                        GameStartedAt = score.Games.CurrentStartedAt,
+                        Turns = ToFile(score.Turns)
                     })
                 ];
             }
@@ -221,6 +226,7 @@ public sealed class Session
                 entry.FinishedAt = match.FinishedAt;
                 entry.Games = ToFile(match.Games.Played);
                 entry.GameStartedAt = match.Games.CurrentStartedAt;
+                entry.Turns = ToFile(match.Turns);
                 entry.History =
                 [
                     .. match.History.Select(played => new PlayedFile
@@ -254,6 +260,28 @@ public sealed class Session
             FinishedAt = game.FinishedAt
         })
     ];
+
+    private static TurnsFile? ToFile(ShootingOrder turns) =>
+        turns.IsSet
+            ? new TurnsFile
+            {
+                Order = [.. turns.Order.Select(seat => new SeatFile { Side = seat.Side == Side.Away ? "away" : "home", Index = seat.Index })],
+                Breakers = [.. turns.Breakers],
+                Shooter = turns.Shooter
+            }
+            : null;
+
+    /// <summary>A saved order that does not hang together is dropped, and the default stands in.</summary>
+    private static void FromFile(TurnsFile? saved, ShootingOrder turns)
+    {
+        turns.Clear();
+        if (saved is null || saved.Order.Count == 0 || saved.Breakers.Count == 0) return;
+        if (saved.Breakers.Any(i => i < 0 || i >= saved.Order.Count)) return;
+
+        turns.Order.AddRange(saved.Order.Select(seat => new Seat(seat.Side == "away" ? Side.Away : Side.Home, Math.Max(0, seat.Index))));
+        turns.Breakers.AddRange(saved.Breakers);
+        turns.Shooter = Math.Clamp(saved.Shooter, 0, saved.Order.Count - 1);
+    }
 
     private static IEnumerable<GameTime> FromFile(IEnumerable<GameFile>? games) =>
         (games ?? [])
@@ -315,6 +343,7 @@ public sealed class Session
                     score.FinishedAt = saved.FinishedAt;
                     score.Games.Played.AddRange(FromFile(saved.Games));
                     score.Games.CurrentStartedAt = saved.GameStartedAt;
+                    FromFile(saved.Turns, score.Turns);
                 }
             }
             else if (state is MatchState match)
@@ -329,6 +358,7 @@ public sealed class Session
                 match.FinishedAt = entry.FinishedAt;
                 match.Games.Played.AddRange(FromFile(entry.Games));
                 match.Games.CurrentStartedAt = entry.GameStartedAt;
+                FromFile(entry.Turns, match.Turns);
 
                 match.History.Clear();
                 foreach (var saved in entry.History ?? [])
@@ -559,6 +589,118 @@ public sealed class Session
             ? RoundRobin.Scores.SelectMany(score => score.Games.Played)
             : Match.History.SelectMany(played => played.Games).Concat(Match.Games.Played));
 
+    // ------------------------------------------------------ shooting order
+
+    /// <summary>The order for the game on the table, or null when there is none to play.</summary>
+    private ShootingOrder? LiveTurns() =>
+        IsRoundRobin
+            ? CurrentSet() is { } current && !current.Score.Committed ? current.Score.Turns : null
+            : Match.Turns;
+
+    private int TeamSize => IsRoundRobin ? Math.Max(1, CurrentSet()?.Match.Home.Length ?? 1) : Config.TeamSize;
+
+    /// <summary>Who breaks the first rack of the game on the table.</summary>
+    private Side OpeningSide() =>
+        IsRoundRobin
+            ? Breaks.FirstBreakSide(CurrentSet()?.Score.BreakSwapped ?? false)
+            : Match.BreakSide;
+
+    private bool GameOver() =>
+        IsRoundRobin
+            ? CurrentSet() is not { } current || current.Score.Committed
+              || Math.Max(current.Score.Home, current.Score.Away) >= RoundRobin.Target
+            : Match.Winner is not null;
+
+    private int RacksOnTable() => IsRoundRobin ? CurrentSet()?.Score.RacksPlayed ?? 0 : Match.RacksPlayed;
+
+    /// <summary>
+    /// Fills in the default order the first time it is needed: the side
+    /// breaking first, its first player, then the other side's first player.
+    /// </summary>
+    private void EnsureTurns(ShootingOrder turns)
+    {
+        if (turns.IsSet) return;
+
+        var open = OpeningSide();
+        turns.Reset(new Seat(open, 0), new Seat(open.Opposite(), 0), TeamSize);
+        turns.FollowRacks(RacksOnTable(), GameOver(), BreakingNext());
+    }
+
+    /// <summary>Who is shooting in the game on the table; null once it is won or there is none.</summary>
+    public Seat? Shooter()
+    {
+        if (LiveTurns() is not { } turns || GameOver()) return null;
+        return turns.IsSet ? turns.Current : new Seat(BreakingNext() ?? OpeningSide(), 0);
+    }
+
+    /// <summary>Who shoots after the player at the table, if they miss.</summary>
+    public Seat? NextShooter()
+    {
+        if (Shooter() is not { } up || LiveTurns() is not { } turns) return null;
+        if (!turns.IsSet) return new Seat(up.Side.Opposite(), 0);
+        return turns.Order[(turns.Shooter + 1) % turns.Order.Count];
+    }
+
+    /// <summary>The first rack's breaker and the player after them, as the setup screen shows them.</summary>
+    public (Seat Breaker, Seat Next) ShootingOpening()
+    {
+        if (LiveTurns() is { Opening: { } opening }) return opening;
+
+        var open = OpeningSide();
+        return (new Seat(open, 0), new Seat(open.Opposite(), 0));
+    }
+
+    /// <summary>
+    /// Sets who breaks the rack on the table and who shoots after them; the
+    /// rest of the rotation follows. Before the first rack, a breaker from the
+    /// other side takes the break across with them.
+    /// </summary>
+    public void SetShootingOrder(Seat breaker, Seat next)
+    {
+        if (LiveTurns() is not { } turns) return;
+        if (next.Side == breaker.Side) next = new Seat(breaker.Side.Opposite(), 0);
+
+        if (RacksOnTable() == 0 && breaker.Side != OpeningSide())
+        {
+            if (IsRoundRobin && CurrentSet() is { } current) current.Score.BreakSwapped = !current.Score.BreakSwapped;
+            else if (!IsRoundRobin) Match.BreakSide = breaker.Side;
+        }
+
+        turns.Reset(breaker, next, TeamSize);
+        Notify();
+    }
+
+    /// <summary>A miss: the next player in the rotation is up.</summary>
+    public void TurnOver()
+    {
+        if (LiveTurns() is not { } turns || GameOver()) return;
+
+        EnsureTurns(turns);
+        turns.TurnOver();
+        Notify();
+    }
+
+    /// <summary>The other side put the pusher back in: the turn goes back to them.</summary>
+    public void PushBack()
+    {
+        if (LiveTurns() is not { } turns || GameOver()) return;
+
+        EnsureTurns(turns);
+        turns.PushBack();
+        Notify();
+    }
+
+    /// <summary>
+    /// Keeps the order in step with a rack added or taken off. The next rack
+    /// is broken by the side the break rule says - or, under winner breaks,
+    /// the side that just took the rack.
+    /// </summary>
+    private void FollowTurns(ShootingOrder turns, Side side, bool won)
+    {
+        if (!turns.IsSet) return;
+        turns.FollowRacks(RacksOnTable(), GameOver(), BreakingNext() ?? (won ? side : null));
+    }
+
     /// <summary>Who breaks the rack about to be played, if the app can know.</summary>
     public Side? BreakingNext()
     {
@@ -588,7 +730,8 @@ public sealed class Session
                 [.. entry.Away.Select(NameFor)],
                 score.Home, score.Away,
                 RoundRobin.Target, RoundRobin.Target,
-                BreakingNext());
+                BreakingNext(),
+                Shooter());
         }
 
         var size = Config.TeamSize;
@@ -597,7 +740,8 @@ public sealed class Session
             [.. Enumerable.Range(0, size).Select(i => NameForSlot(size + i) ?? SideLabel(Side.Away, i, size))],
             Match.Home, Match.Away,
             Match.TargetHome, Match.TargetAway,
-            BreakingNext());
+            BreakingNext(),
+            Shooter());
     }
 
     private static string SideLabel(Side side, int index, int teamSize)
@@ -638,6 +782,8 @@ public sealed class Session
             if (after == before) return null;
             if (Hold(after > before, by, now) is { } refusal) return refusal;
 
+            EnsureTurns(score.Turns);
+
             if (side == Side.Home) score.Home = after;
             else score.Away = after;
 
@@ -646,6 +792,7 @@ public sealed class Session
 
             // Won: no game is being played until the next set starts.
             if (Math.Max(score.Home, score.Away) >= RoundRobin.Target) score.Games.CurrentStartedAt = null;
+            FollowTurns(score.Turns, side, after > before);
         }
         else
         {
@@ -654,6 +801,8 @@ public sealed class Session
             if (after == before) return null;
             if (Hold(after > before, by, now) is { } refusal) return refusal;
 
+            EnsureTurns(Match.Turns);
+
             if (side == Side.Home) Match.Home = after;
             else Match.Away = after;
 
@@ -661,6 +810,7 @@ public sealed class Session
             Log(Match.Games, side, after > before, now);
             RefreshMatchWinner();
             if (Match.Winner is not null) Match.Games.CurrentStartedAt = null;
+            FollowTurns(Match.Turns, side, after > before);
         }
 
         Notify();
@@ -775,6 +925,7 @@ public sealed class Session
                 score.StartedAt = null;
                 score.FinishedAt = null;
                 score.Games.Clear();
+                score.Turns.Clear();
             }
 
             RoundRobin.CurrentSet = Config.Schedule.FirstOrDefault()?.Set;
@@ -841,6 +992,7 @@ public sealed class Session
         Match.StartedAt = null;
         Match.FinishedAt = null;
         Match.Games.Clear();
+        Match.Turns.Clear();
     }
 
     /// <summary>
@@ -858,6 +1010,14 @@ public sealed class Session
         else
         {
             Match.BreakSide = Match.BreakSide.Opposite();
+        }
+
+        // Before the first rack, the order goes with the break: the other
+        // side's first player breaks, and this side's follows.
+        if (LiveTurns() is { IsSet: true } turns && RacksOnTable() == 0)
+        {
+            var open = OpeningSide();
+            turns.Reset(new Seat(open, 0), new Seat(open.Opposite(), 0), TeamSize);
         }
 
         Notify();

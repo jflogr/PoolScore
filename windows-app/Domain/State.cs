@@ -33,6 +33,9 @@ public sealed class SetScore(int set)
     /// <summary>The set's games in order, and the clock on the one being played.</summary>
     public GameLog Games { get; } = new();
 
+    /// <summary>Who is at the table in this set.</summary>
+    public ShootingOrder Turns { get; } = new();
+
     public int RacksPlayed => Home + Away;
 
     /// <summary>The set's playing time so far: its games added up, plus the one on the table.</summary>

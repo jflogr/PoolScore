@@ -15,7 +15,8 @@ public sealed record BannerState(
     int AwayScore,
     int HomeTarget,
     int AwayTarget,
-    Side? Breaking)
+    Side? Breaking,
+    Seat? Shooter = null)
 {
     public static readonly BannerState Blank = new([], [], 0, 0, 3, 3, null);
 
@@ -80,6 +81,9 @@ public sealed class BannerForm : Form
     /// <summary>Raised when a scoring key is pressed while the banner has focus.</summary>
     public event EventHandler<(Side Side, int Delta)>? Scored;
 
+    /// <summary>Raised when Enter - a miss, the turn passing on - is pressed while the banner has focus.</summary>
+    public event EventHandler? TurnedOver;
+
     /// <summary>Exact pixel size for the capture, so OBS needs no cropping.</summary>
     public void SetCaptureSize(int width, int height) => ClientSize = new Size(width, height);
 
@@ -92,6 +96,12 @@ public sealed class BannerForm : Form
         if (Shortcuts.Read(keyData) is { } shortcut)
         {
             Scored?.Invoke(this, shortcut);
+            return true;
+        }
+
+        if (Shortcuts.IsTurnOver(keyData))
+        {
+            TurnedOver?.Invoke(this, EventArgs.Empty);
             return true;
         }
 
@@ -198,10 +208,10 @@ public sealed class BannerForm : Form
             Measure(g, _state.AwayNames, height * 0.38f, nameBox));
 
         DrawName(g, _state.HomeNames, nameSize, nameBox, blockLeft - gap, centre,
-                 rightAligned: true, breaking: _state.Breaking == Side.Home, dot, dotSpace);
+                 rightAligned: true, breaking: _state.Breaking == Side.Home, dot, dotSpace, Side.Home, _state.Shooter);
 
         DrawName(g, _state.AwayNames, nameSize, nameBox, blockLeft + blockWidth + gap, centre,
-                 rightAligned: false, breaking: _state.Breaking == Side.Away, dot, dotSpace);
+                 rightAligned: false, breaking: _state.Breaking == Side.Away, dot, dotSpace, Side.Away, _state.Shooter);
     }
 
     /// <summary>
@@ -252,9 +262,13 @@ public sealed class BannerForm : Form
         return block.Font.Size;
     }
 
+    /// <summary>Names not at the table, dimmed so the viewer's eye goes to whoever is up.</summary>
+    private static readonly Color Waiting = ColorTranslator.FromHtml("#6f8195");
+
     private static void DrawName(Graphics g, string[] names, float fontSize, SizeF box,
                                  float edge, float centre,
-                                 bool rightAligned, bool breaking, int dot, float dotSpace)
+                                 bool rightAligned, bool breaking, int dot, float dotSpace,
+                                 Side side, Seat? shooter)
     {
         using var block = NameLayout.At(g, names, " | ", fontSize, box.Width, FontStyle.Bold);
 
@@ -264,7 +278,8 @@ public sealed class BannerForm : Form
             box.Width,
             box.Height);
 
-        NameLayout.Draw(g, block, area, rightAligned ? NameAlign.Right : NameAlign.Left, Paper);
+        NameLayout.DrawSide(g, block, area, rightAligned ? NameAlign.Right : NameAlign.Left,
+            Paper, Waiting, names, side, shooter, " | ");
 
         if (!breaking) return;
 

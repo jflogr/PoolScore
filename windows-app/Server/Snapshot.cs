@@ -9,7 +9,11 @@ public sealed record ScoreLine(
     int AwayScore,
     int HomeTarget,
     int AwayTarget,
-    string? Breaking);
+    string? Breaking,
+    ShooterLine? Shooter = null);
+
+/// <summary>Who is at the table: "home" or "away", and which of that side's players.</summary>
+public sealed record ShooterLine(string Side, int Index);
 
 /// <summary>Possible is null in singles and doubles, where there is no schedule left to play.</summary>
 public sealed record LeaderLine(string Name, int Wins, int Played, int? Possible, int RacksWon, int RacksLost);
@@ -111,7 +115,8 @@ public sealed record Snapshot(
             view.HomeNames, view.AwayNames,
             view.HomeScore, view.AwayScore,
             view.HomeTarget, view.AwayTarget,
-            view.Breaking?.ToString().ToLowerInvariant());
+            view.Breaking?.ToString().ToLowerInvariant(),
+            view.Shooter is { } up ? new ShooterLine(up.Side == Side.Away ? "away" : "home", up.Index) : null);
 
         var leaders = session.Standings()
             .Select(row => new LeaderLine(

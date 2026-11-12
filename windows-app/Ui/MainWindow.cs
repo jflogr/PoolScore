@@ -53,7 +53,7 @@ public sealed class MainWindow : Form
     private const int TimeColumn = 7;
 
     private ToolStripButton _undo = null!;
-    private ToolStripButton _reset = null!;
+    private Button _reset = null!;
 
     private PlayersDialog? _players;
 
@@ -61,6 +61,38 @@ public sealed class MainWindow : Form
     private readonly ComboBox _breakBox = new() { DropDownStyle = ComboBoxStyle.DropDownList, Width = 230, Font = new Font(FontFamily.GenericSansSerif, 11f) };
     private readonly ComboBox _nameBox = new() { DropDownStyle = ComboBoxStyle.DropDownList, Width = 230, Font = new Font(FontFamily.GenericSansSerif, 11f) };
     private readonly ComboBox _longBox = new() { DropDownStyle = ComboBoxStyle.DropDownList, Width = 230, Font = new Font(FontFamily.GenericSansSerif, 11f) };
+
+    // Who breaks the game on the table, and who shoots after them; the rest
+    // of the rotation follows from those two.
+    private readonly ComboBox _breakerBox = new() { DropDownStyle = ComboBoxStyle.DropDownList, Width = 230, Font = new Font(FontFamily.GenericSansSerif, 11f) };
+    private readonly ComboBox _nextBox = new() { DropDownStyle = ComboBoxStyle.DropDownList, Width = 230, Font = new Font(FontFamily.GenericSansSerif, 11f) };
+    private readonly Label _nextLabel = new() { Text = "Then", AutoSize = true, Padding = new Padding(0, 8, 0, 0), Font = new Font(FontFamily.GenericSansSerif, 10.5f) };
+    private string _orderSignature = string.Empty;
+
+    // The Play tab: who is up, in print you can read from the cue, and who follows.
+    private readonly Label _shooterLabel = new()
+    {
+        AutoSize = true,
+        Font = new Font(FontFamily.GenericSansSerif, 24f, FontStyle.Bold),
+        ForeColor = Ink,
+        Margin = new Padding(0, 0, 0, 2)
+    };
+
+    private readonly Label _nextUpLabel = new()
+    {
+        AutoSize = true,
+        Font = new Font(FontFamily.GenericSansSerif, 12f),
+        ForeColor = ColorTranslator.FromHtml("#5b6b7d"),
+        Margin = new Padding(2, 0, 0, 0)
+    };
+
+    private TabPage _playPage = null!;
+
+    /// <summary>A player in a shooting-order picker: their place at the table and how they read.</summary>
+    private sealed record SeatChoice(Seat Seat, string Label)
+    {
+        public override string ToString() => Label;
+    }
 
     /// <summary>What the long-match picker offers, in minutes; 0 is off.</summary>
     private static readonly int[] LongMatchChoices = [0, 20, 25, 30, 35, 40, 45];
@@ -271,6 +303,18 @@ public sealed class MainWindow : Form
                     return;
                 }
 
+                if (change.Change == SetupChange.TurnOver)
+                {
+                    _session.TurnOver();
+                    return;
+                }
+
+                if (change.Change == SetupChange.PushBack)
+                {
+                    _session.PushBack();
+                    return;
+                }
+
                 if (_session.IsRoundRobin) return;
 
                 switch (change.Change)
@@ -421,6 +465,13 @@ public sealed class MainWindow : Form
             return true;
         }
 
+        // Enter: a miss, so the next player in the order is up.
+        if (Shortcuts.IsTurnOver(keyData) && !TypingInto(ActiveControl))
+        {
+            _session.TurnOver();
+            return true;
+        }
+
         return base.ProcessCmdKey(ref message, keyData);
     }
 
@@ -459,11 +510,9 @@ public sealed class MainWindow : Form
 
         _undo = Command("Previous match", Icons.Undo, icon, _session.UndoLastCommit);
 
+        // Swap break and Reset live on the Play tab with the other in-game
+        // buttons; the toolbar keeps the roster, undo and the banner.
         _commands.Items.Add(Command("Players", Icons.Group, icon, ShowPlayers));
-        _commands.Items.Add(Command("Swap break", Icons.SwapHoriz, icon, _session.SwapBreak));
-        _commands.Items.Add(Command("Restart game clock", Icons.Timer, icon, _session.RestartGameClock));
-        _reset = Command("Reset", Icons.RestartAlt, icon, ResetScores);
-        _commands.Items.Add(_reset);
         _commands.Items.Add(_undo);
 
         // Off on its own at the far end: it opens a window rather than
@@ -651,15 +700,18 @@ public sealed class MainWindow : Form
         _tabs.Padding = new Point(12, 8);
         _tabs.Font = new Font(FontFamily.GenericSansSerif, 11f);
 
+        _playPage = Page("Play", BuildPlayTab());
         _settingsPage = Page("Match settings", BuildSettingsTab());
         _matchesPage = Page("Matches", WithSummary(_matches, _matchesSummary));
         _leaderboardPage = Page("Player stats", BuildStatsTab());
 
-        // The last two only mean anything in a round robin; SyncTabs takes
-        // them away for a one-off match rather than showing empty tables.
-        _tabs.TabPages.Add(_settingsPage);
+        // Play first and open, because it is used every shot; Match settings
+        // last, because it is set once a night. Matches only exists in a
+        // round robin, and SyncTabs takes it away for a one-off match.
+        _tabs.TabPages.Add(_playPage);
         _tabs.TabPages.Add(_matchesPage);
         _tabs.TabPages.Add(_leaderboardPage);
+        _tabs.TabPages.Add(_settingsPage);
 
         _leaders.Columns.Add("Player", 250);
         _leaders.Columns.Add("Wins", 100);
@@ -789,6 +841,82 @@ public sealed class MainWindow : Form
         if (answer == DialogResult.Yes) _session.ClearHistory();
     }
 
+    /// <summary>
+    /// What gets used every shot, kept apart from what is set once a night:
+    /// who is up and who follows, the big buttons for a miss, a push handed
+    /// back and the game clock, and this match's shooting order.
+    /// </summary>
+    private Control BuildPlayTab()
+    {
+        var panel = new FlowLayoutPanel
+        {
+            Dock = DockStyle.Fill,
+            FlowDirection = FlowDirection.TopDown,
+            WrapContents = false,
+            AutoScroll = true,
+            Padding = new Padding(10, 4, 10, 6)
+        };
+
+        panel.Controls.Add(Heading("Shooting"));
+        panel.Controls.Add(_shooterLabel);
+        panel.Controls.Add(_nextUpLabel);
+
+        var buttons = new FlowLayoutPanel { AutoSize = true, WrapContents = true, Margin = new Padding(0, 14, 0, 4) };
+        buttons.Controls.Add(PlayButton("Turn over   (Enter)", primary: true, _session.TurnOver));
+        buttons.Controls.Add(PlayButton("Push reverse", primary: false, _session.PushBack));
+        buttons.Controls.Add(PlayButton("Restart game clock", primary: false, _session.RestartGameClock));
+        buttons.SetFlowBreak(buttons.Controls[^1], true);
+        buttons.Controls.Add(PlayButton("Swap break", primary: false, _session.SwapBreak));
+
+        // Destructive, so it reads differently and always asks first.
+        _reset = PlayButton("Reset", primary: false, ResetScores);
+        _reset.ForeColor = ColorTranslator.FromHtml("#9b2c2c");
+        buttons.Controls.Add(_reset);
+        panel.Controls.Add(buttons);
+
+        panel.Controls.Add(Heading("Shooting order for this match"));
+
+        var order = new FlowLayoutPanel { AutoSize = true, WrapContents = true, Margin = new Padding(0, 0, 0, 4) };
+        order.Controls.Add(new Label
+        {
+            Text = "Breaks",
+            AutoSize = true,
+            Padding = new Padding(0, 6, 4, 0),
+            Font = new Font(FontFamily.GenericSansSerif, 10.5f)
+        });
+        order.Controls.Add(_breakerBox);
+        _nextLabel.Padding = new Padding(14, 6, 4, 0);
+        order.Controls.Add(_nextLabel);
+        order.Controls.Add(_nextBox);
+        panel.Controls.Add(order);
+
+        return panel;
+    }
+
+    /// <summary>
+    /// Big enough to hit without looking, never a tab stop - so Enter and the
+    /// arrows keep going to the scoring rather than to whichever was last hit.
+    /// </summary>
+    private static Button PlayButton(string text, bool primary, Action onClick)
+    {
+        var button = new Button
+        {
+            Text = text,
+            Width = 230,
+            Height = 64,
+            TabStop = false,
+            FlatStyle = FlatStyle.Flat,
+            BackColor = primary ? Ink : Color.White,
+            ForeColor = primary ? Color.White : Ink,
+            Font = new Font(FontFamily.GenericSansSerif, 12f, FontStyle.Bold),
+            Margin = new Padding(0, 0, 10, 10)
+        };
+
+        button.FlatAppearance.BorderColor = ColorTranslator.FromHtml("#c4ccd6");
+        button.Click += (_, _) => onClick();
+        return button;
+    }
+
     /// <summary>Format, race, house rules, who plays where, and the phone code.</summary>
     private Control BuildSettingsTab()
     {
@@ -854,6 +982,23 @@ public sealed class MainWindow : Form
 
         right.Controls.Add(Heading("Line-up"));
         right.Controls.Add(_lineup);
+
+        // Who breaks and who follows; Enter passes the turn on a miss.
+        _breakerBox.SelectedIndexChanged += (_, _) =>
+        {
+            if (_loading || _breakerBox.SelectedItem is not SeatChoice breaker) return;
+            var next = _nextBox.SelectedItem is SeatChoice chosen && chosen.Seat.Side != breaker.Seat.Side
+                ? chosen.Seat
+                : new Seat(breaker.Seat.Side.Opposite(), 0);
+            _session.SetShootingOrder(breaker.Seat, next);
+        };
+
+        _nextBox.SelectedIndexChanged += (_, _) =>
+        {
+            if (_loading || _breakerBox.SelectedItem is not SeatChoice breaker || _nextBox.SelectedItem is not SeatChoice next) return;
+            _session.SetShootingOrder(breaker.Seat, next.Seat);
+        };
+
 
         // Lights the scoreboard up once a match runs past it, so the table
         // can decide whether to cut it short. The score is left to them.
@@ -1079,6 +1224,59 @@ public sealed class MainWindow : Form
         _raceAwayLabel.Text = "Away races to";
 
         SyncLineup(session);
+        SyncShootingOrder(session);
+    }
+
+    /// <summary>
+    /// The shooting-order pickers for the game on the table. Rebuilt only when
+    /// the players or the breaking side change, so a list never vanishes
+    /// while someone is choosing from it.
+    /// </summary>
+    private void SyncShootingOrder(Session session)
+    {
+        var view = session.View();
+        var (breaker, next) = session.ShootingOpening();
+        var live = view.HomeNames.Length > 0 && session.Shooter() is not null;
+
+        _breakerBox.Enabled = live;
+        _nextBox.Enabled = live;
+
+        // In singles the player after the breaker can only be the other one.
+        var doubles = view.HomeNames.Length > 1;
+        _nextLabel.Visible = doubles;
+        _nextBox.Visible = doubles;
+
+        SeatChoice Choice(Side side, int index)
+        {
+            var names = side == Side.Home ? view.HomeNames : view.AwayNames;
+            return new SeatChoice(new Seat(side, index), $"{names.ElementAtOrDefault(index)}  ·  {(side == Side.Home ? "A" : "B")}");
+        }
+
+        var signature = string.Join(",", view.HomeNames) + "|" + string.Join(",", view.AwayNames) + "|" + breaker.Side;
+        if (signature != _orderSignature)
+        {
+            _orderSignature = signature;
+
+            _breakerBox.Items.Clear();
+            for (var i = 0; i < view.HomeNames.Length; i++) _breakerBox.Items.Add(Choice(Side.Home, i));
+            for (var i = 0; i < view.AwayNames.Length; i++) _breakerBox.Items.Add(Choice(Side.Away, i));
+
+            var other = breaker.Side.Opposite();
+            var others = other == Side.Home ? view.HomeNames : view.AwayNames;
+            _nextBox.Items.Clear();
+            for (var i = 0; i < others.Length; i++) _nextBox.Items.Add(Choice(other, i));
+        }
+
+        _breakerBox.SelectedItem = _breakerBox.Items.Cast<SeatChoice>().FirstOrDefault(choice => choice.Seat == breaker);
+        _nextBox.SelectedItem = _nextBox.Items.Cast<SeatChoice>().FirstOrDefault(choice => choice.Seat == next);
+
+        string? NameAt(Seat? seat) => seat is { } at
+            ? (at.Side == Side.Home ? view.HomeNames : view.AwayNames).ElementAtOrDefault(at.Index)
+            : null;
+
+        var up = NameAt(session.Shooter());
+        _shooterLabel.Text = up is null ? "Nobody at the table" : up.ToUpperInvariant();
+        _nextUpLabel.Text = NameAt(session.NextShooter()) is { } then ? $"Then {then}" : string.Empty;
     }
 
     private void SyncLineup(Session session)
@@ -1149,7 +1347,7 @@ public sealed class MainWindow : Form
             Upper(view.HomeNames), Upper(view.AwayNames),
             view.HomeScore, view.AwayScore,
             view.HomeTarget, view.AwayTarget,
-            view.Breaking);
+            view.Breaking, view.Shooter);
     }
 
     private static BannerState BuildBannerState(Session session)
@@ -1160,7 +1358,7 @@ public sealed class MainWindow : Form
             Upper(view.HomeNames), Upper(view.AwayNames),
             view.HomeScore, view.AwayScore,
             view.HomeTarget, view.AwayTarget,
-            view.Breaking);
+            view.Breaking, view.Shooter);
     }
 
     private void FillLeaders(Session session)
@@ -1272,6 +1470,7 @@ public sealed class MainWindow : Form
 
         _banner = new BannerForm { Owner = this, State = BuildBannerState(_session) };
         _banner.Scored += (_, shortcut) => Score(shortcut.Side, shortcut.Delta);
+        _banner.TurnedOver += (_, _) => _session.TurnOver();
         _banner.FormClosed += (_, _) => _banner = null;
         _banner.Location = new Point(Left, Math.Max(0, Top - _banner.Height - 8));
         _banner.Show();

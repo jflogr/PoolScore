@@ -22,6 +22,9 @@ public sealed class NameBlock(Font font, string[] lines, float lineHeight) : IDi
     public Font Font { get; } = font;
     public string[] Lines { get; } = lines;
     public float LineHeight { get; } = lineHeight;
+
+    /// <summary>The names the lines were built from, for picking one out when drawing.</summary>
+    public IReadOnlyList<string> Names { get; init; } = [];
     public float TotalHeight => Lines.Length * LineHeight;
 
     public void Dispose() => Font.Dispose();
@@ -95,11 +98,11 @@ public static class NameLayout
         var plain = BuildLines(g, names, separator, font, maxWidth, allowWordWrap: false);
         if (plain.All(line => g.MeasureString(line, font).Width <= maxWidth))
         {
-            return new NameBlock(font, [.. plain], font.GetHeight(g));
+            return new NameBlock(font, [.. plain], font.GetHeight(g)) { Names = [.. names] };
         }
 
         var wrapped = BuildLines(g, names, separator, font, maxWidth, allowWordWrap: true);
-        return new NameBlock(font, [.. wrapped], font.GetHeight(g));
+        return new NameBlock(font, [.. wrapped], font.GetHeight(g)) { Names = [.. names] };
     }
 
     private static NameBlock FitAt(
@@ -127,7 +130,7 @@ public static class NameLayout
             var fitsWidth = lines.All(line => g.MeasureString(line, candidate).Width <= box.Width);
             var fitsHeight = lines.Count * lineHeight <= box.Height;
 
-            if (fitsWidth && fitsHeight) return new NameBlock(candidate, [.. lines], lineHeight);
+            if (fitsWidth && fitsHeight) return new NameBlock(candidate, [.. lines], lineHeight) { Names = [.. names] };
 
             candidate.Dispose();
         }
@@ -135,7 +138,7 @@ public static class NameLayout
         // Nothing fit cleanly - take the smallest and let it be tight.
         var smallest = new Font(FontFamily.GenericSansSerif, Math.Max(1f, minSize), style, GraphicsUnit.Pixel);
         var last = BuildLines(g, names, separator, smallest, box.Width, allowWordWrap);
-        return new NameBlock(smallest, [.. last], smallest.GetHeight(g));
+        return new NameBlock(smallest, [.. last], smallest.GetHeight(g)) { Names = [.. names] };
     }
 
     private static List<string> BuildLines(
@@ -250,4 +253,92 @@ public static class NameLayout
             g.DrawString(line, block.Font, brush, x, top + i * block.LineHeight);
         }
     }
+
+    /// <summary>
+    /// The same block with one name picked out: <paramref name="shown"/> in
+    /// full colour, every other name - and the separators - dimmed. A name
+    /// broken across lines cannot be matched up, so it keeps full colour
+    /// rather than risk dimming the one that is up.
+    /// </summary>
+    public static void Draw(Graphics g, NameBlock block, RectangleF box, NameAlign align, Color colour,
+                            Color dimmed, string shown, string? separator, NameVAlign vertical = NameVAlign.Centre)
+    {
+        if (block.Lines.Length == 0) return;
+
+        using var bright = new SolidBrush(colour);
+        using var dim = new SolidBrush(dimmed);
+        var format = StringFormat.GenericTypographic;
+        format.FormatFlags |= StringFormatFlags.MeasureTrailingSpaces;
+
+        var top = vertical == NameVAlign.Top
+            ? box.Top
+            : box.Top + (box.Height - block.TotalHeight) / 2f;
+
+        for (var i = 0; i < block.Lines.Length; i++)
+        {
+            var line = block.Lines[i];
+            var pieces = separator is null ? [line] : Split(line, separator);
+            var width = pieces.Sum(piece => g.MeasureString(piece, block.Font, PointF.Empty, format).Width);
+
+            var x = align switch
+            {
+                NameAlign.Right => box.Right - width,
+                NameAlign.Centre => box.Left + (box.Width - width) / 2f,
+                _ => box.Left
+            };
+
+            foreach (var piece in pieces)
+            {
+                var isName = separator is null || piece != separator;
+                var known = isName && (piece == shown || Matches(block, piece));
+                var brush = !isName || (known && piece != shown) ? dim : bright;
+
+                g.DrawString(piece, block.Font, brush, x, top + i * block.LineHeight, format);
+                x += g.MeasureString(piece, block.Font, PointF.Empty, format).Width;
+            }
+        }
+    }
+
+    /// <summary>
+    /// One side's names with the shooter shown: no shooter and all are in full
+    /// colour; the other side up and all of these are dimmed; one of these up
+    /// and only they are in full colour, their partner waiting dimmed.
+    /// </summary>
+    public static void DrawSide(Graphics g, NameBlock block, RectangleF box, NameAlign align,
+                                Color colour, Color dimmed, string[] names, Domain.Side side,
+                                Domain.Seat? shooter, string? separator, NameVAlign vertical = NameVAlign.Centre)
+    {
+        if (shooter is not { } up)
+        {
+            Draw(g, block, box, align, colour, vertical);
+        }
+        else if (up.Side != side)
+        {
+            Draw(g, block, box, align, dimmed, vertical);
+        }
+        else
+        {
+            var shown = names.ElementAtOrDefault(up.Index);
+            if (shown is null) Draw(g, block, box, align, colour, vertical);
+            else Draw(g, block, box, align, colour, dimmed, shown, separator, vertical);
+        }
+    }
+
+    /// <summary>A line cut into names and the separators between them, separators kept.</summary>
+    private static List<string> Split(string line, string separator)
+    {
+        var pieces = new List<string>();
+        var parts = line.Split(separator);
+
+        for (var i = 0; i < parts.Length; i++)
+        {
+            if (i > 0) pieces.Add(separator);
+            if (parts[i].Length > 0) pieces.Add(parts[i]);
+        }
+
+        return pieces;
+    }
+
+    /// <summary>Whether this piece is one whole name rather than part of a name broken across lines.</summary>
+    private static bool Matches(NameBlock block, string piece) => block.Names.Contains(piece);
 }

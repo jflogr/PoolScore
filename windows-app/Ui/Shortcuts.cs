@@ -26,4 +26,7 @@ internal static class Shortcuts
         var delta = (keyData & Keys.Alt) == Keys.Alt ? -1 : +1;
         return (key == Keys.Left ? Side.Home : Side.Away, delta);
     }
+
+    /// <summary>Enter on its own: a miss, so the turn passes to the next player in the order.</summary>
+    public static bool IsTurnOver(Keys keyData) => keyData == Keys.Enter;
 }

@@ -20,6 +20,21 @@ public sealed class ScoreFile
     public DateTimeOffset? FinishedAt { get; set; }
     public List<GameFile>? Games { get; set; }
     public DateTimeOffset? GameStartedAt { get; set; }
+    public TurnsFile? Turns { get; set; }
+}
+
+/// <summary>The shooting order: the rotation, who broke each rack, and who is up.</summary>
+public sealed class TurnsFile
+{
+    public List<SeatFile> Order { get; set; } = [];
+    public List<int> Breakers { get; set; } = [];
+    public int Shooter { get; set; }
+}
+
+public sealed class SeatFile
+{
+    public string Side { get; set; } = "home";
+    public int Index { get; set; }
 }
 
 /// <summary>One game won, and when it started and finished.</summary>
@@ -52,6 +67,7 @@ public sealed class ModeFile
     public DateTimeOffset? FinishedAt { get; set; }
     public List<GameFile>? Games { get; set; }
     public DateTimeOffset? GameStartedAt { get; set; }
+    public TurnsFile? Turns { get; set; }
     public List<PlayedFile>? History { get; set; }
 }
 

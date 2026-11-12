@@ -32,7 +32,13 @@ public enum SetupChange
     /// The centre button: Start before a match, Next match or New match once
     /// a side has won. Any format; does only what the button says just then.
     /// </summary>
-    Centre
+    Centre,
+
+    /// <summary>A miss: the next player in the shooting order is up. Any format.</summary>
+    TurnOver,
+
+    /// <summary>A push handed back: the turn goes back one. Any format.</summary>
+    PushBack
 }
 
 /// <summary>
@@ -322,6 +328,12 @@ public sealed class ScoreServer : IAsyncDisposable
                 break;
             case "centre":
                 change = SetupChange.Centre;
+                break;
+            case "turn":
+                change = SetupChange.TurnOver;
+                break;
+            case "pushback":
+                change = SetupChange.PushBack;
                 break;
             default:
                 return Results.BadRequest();

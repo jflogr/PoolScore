@@ -12,7 +12,8 @@ public sealed record ScoringState(
     int AwayScore,
     int HomeTarget,
     int AwayTarget,
-    Side? Breaking)
+    Side? Breaking,
+    Seat? Shooter = null)
 {
     public static readonly ScoringState Blank = new([], [], 0, 0, 3, 3, null);
 
@@ -346,7 +347,7 @@ public sealed class ScoringPanel : Control
         var won = isHome ? _state.HomeWon : _state.AwayWon;
         var onHill = isHome ? _state.HomeOnHill : _state.AwayOnHill;
 
-        DrawNames(g, column, names, breaking, isHome);
+        DrawNames(g, column, names, breaking, isHome, _state.Shooter);
         DrawBigNumber(g, number, score, Shade(won, onHill));
         DrawRace(g, race, target);
 
@@ -371,7 +372,10 @@ public sealed class ScoringPanel : Control
         DrawButton(g, plus, "+", key);
     }
 
-    private static void DrawNames(Graphics g, Rectangle area, string[] names, bool breaking, bool isHome)
+    /// <summary>Names not at the table: still there to read, but clearly not the one up.</summary>
+    private static readonly Color Waiting = ColorTranslator.FromHtml("#6f8195");
+
+    private static void DrawNames(Graphics g, Rectangle area, string[] names, bool breaking, bool isHome, Seat? shooter)
     {
         if (names.Length == 0) return;
 
@@ -390,7 +394,9 @@ public sealed class ScoringPanel : Control
             maxSize: area.Height * 0.46f, minSize: 11f,
             box: text.Size, style: FontStyle.Bold);
 
-        NameLayout.Draw(g, block, text, isHome ? NameAlign.Left : NameAlign.Right, Paper, NameVAlign.Top);
+        // The player at the table in full white, everyone waiting dimmed.
+        NameLayout.DrawSide(g, block, text, isHome ? NameAlign.Left : NameAlign.Right,
+            Paper, Waiting, names, isHome ? Side.Home : Side.Away, shooter, separator: null, NameVAlign.Top);
 
         if (!breaking) return;
 
