@@ -76,18 +76,26 @@ nights of several sets:
 -------------------------------------------------------------------
 MATCH TIMES (Windows app)
 -------------------------------------------------------------------
-- Each set's clock starts when Next match is pressed on the set before it,
-  or at its first rack if nothing started it (the first set of the night).
-  It stops when the set is committed.
+- What is timed is the games (see GAME TIMES). A match's time is its games
+  added up, so the changeover and any break between matches are not counted
+  as play.
+- Press Start (the gold button between the scores, or on an allowed phone)
+  when the players are at the table: that puts the match and its first game
+  on the clock. Next match and New match no longer start the clock - the next
+  match waits for its own Start. Forget it and the first rack still starts
+  the match, but that first game has no time.
 - The time so far sits at the top of the scoreboard, between the names, and
   every played set's time is in the Matches tab.
 - A line under the scoreboard gives the average match so far, how many are
-  left, and the projected finish: the rest of the current set at the
-  average, plus an average set for each one still to play. It needs one set
-  played before it has anything to go on. Round robins only - singles and
-  doubles show the average alone (see PLAYER STATS).
-- A long break between sets counts towards the set after it - the clock
-  cannot tell a break from a slow set.
+  left, and the projected finish: the games still to play at the average
+  game so far, plus the usual changeover before each set yet to start.
+  Games to a set come from the sets already played - until one is, a race is
+  taken to run halfway between a sweep and hill-hill. The changeover is the
+  gap from one set ending to the next Start; a gap over half an hour counts
+  as a break and is left out. Every game and every set played feeds those
+  averages, so the forecast firms up as the night goes on. It needs one
+  timed game. Round robins only - singles and doubles show the average
+  alone (see PLAYER STATS).
 - Long match (Match settings, on the right) lights the scoreboard up once a
   match runs past it: an orange frame round the scoreboard and an orange
   clock. It goes off as soon as a side wins. Off, or 20 to 45 minutes; 25 to
@@ -96,11 +104,9 @@ MATCH TIMES (Windows app)
   score by hand. The banner never shows it.
 
 GAME TIMES
-- Every game (rack) is timed too, roughly: from one score change to the
-  next, so it includes racking up. A set's first game starts with Next
-  match (New match in singles and doubles). The first game of the night has
-  nobody to start it, so it has no time - press Restart game clock at the
-  break-off to time it as well.
+- Every game (rack) is timed, roughly: from one score change to the next,
+  so it includes racking up. A match's first game starts with its Start.
+  Once a side has won, no game is being timed until the next Start.
 - GAME 3:21 under the match clock is the game on the table.
 - Taking a rack off undoes that game, and if it was the one just finished
   its clock picks up again from when it really started - so a wrong tap put
@@ -113,7 +119,7 @@ GAME TIMES
   doubles show the same under each race in the History.
 - Phones get it all too: MATCH and GAME clocks along the foot of the score,
   and the same games, with the winning side's names, under each match or
-  race. Restart game clock stays at the PC.
+  race. Allowed phones can press Start; Restart game clock stays at the PC.
 
 -------------------------------------------------------------------
 NO DOUBLE-SCORING (Windows app)
@@ -143,8 +149,15 @@ TWO WAYS TO RUN IT
    handicap the two sides show different numbers, which is the point of it.
 
    Score with the big -/+ buttons, or from the keyboard:
-     A       add a rack to the left side      ALT+A   take one off
-     B       add a rack to the right side     ALT+B   take one off
+     LEFT ARROW    add a rack to the left side     ALT+LEFT    take one off
+     RIGHT ARROW   add a rack to the right side    ALT+RIGHT   take one off
+   The arrows point at the side they score. They work wherever the focus is,
+   including a player dropdown you have just picked from - only a text box,
+   or a dropdown with its list open, keeps the arrow for itself.
+
+   The gold button between the scores says what happens next: Start before a
+   match (it puts the match and its first game on the clock), then Next match
+   - New match in singles and doubles - once a side has won.
 
    A toolbar under that has Commit, Undo last, Swap break, Players, Banner and
    Reset - called Clear scores in singles and doubles, where there is only
@@ -219,14 +232,17 @@ WINDOWS APP - anyone can watch, you choose who scores
   the scoreboard on the PC - "Dave wants to score" - with Allow and Deny. It
   never covers the score or takes focus, and the OBS banner never shows it.
   Several asks at once queue up and are answered one at a time.
-- An allowed phone gets a minus and a plus beside each side's score.
+- An allowed phone gets a minus and a plus beside each side's score, and the
+  same gold button as the PC under them: Start before a match, then Next
+  match (New match in singles and doubles) once a side has won. Pressed late,
+  it does only what the PC's button says at that moment, so it can never
+  start or end the wrong thing.
 - In singles and doubles an allowed phone can also set each side's race, pick
-  the players and clear the scores - there is no schedule or player stats to
-  show, so the room is there. Changing a player starts the score from 0 - 0,
-  as it does at the PC.
-- In a round robin the plus and minus are all a phone gets. The format, the
-  line-up, finishing a set and undo stay at the PC, so nobody can break the
-  evening's schedule mid-game.
+  the players and clear the scores - there is no schedule to show, so the
+  room is there. Changing a player starts the score from 0 - 0, as it does
+  at the PC.
+- In a round robin that is all a phone gets. The format, the line-up and
+  undo stay at the PC, so nobody can break the evening's schedule mid-game.
 - Allowed phones are listed under "Scoring" below the QR code. The cross next
   to one stops it scoring at once; it can ask again.
 - Approvals last until the app closes, so every match night starts with only

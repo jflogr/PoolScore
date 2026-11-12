@@ -21,6 +21,24 @@ public sealed class GameLog
 
     public TimeSpan? Current(DateTimeOffset now) => Timing.Between(CurrentStartedAt, null, now);
 
+    /// <summary>
+    /// The match's playing time: its games added up, plus the one on the table.
+    /// Null until a game has a time or one is being timed.
+    /// </summary>
+    public TimeSpan? Total(DateTimeOffset now)
+    {
+        var played = Sum(Played);
+        var current = Current(now);
+        return played is null && current is null ? null : (played ?? TimeSpan.Zero) + (current ?? TimeSpan.Zero);
+    }
+
+    /// <summary>The games' times added up; null if none has a time. An untimed game adds nothing.</summary>
+    public static TimeSpan? Sum(IEnumerable<GameTime> games)
+    {
+        var lengths = games.Select(game => game.Duration).OfType<TimeSpan>().ToList();
+        return lengths.Count == 0 ? null : lengths.Aggregate(TimeSpan.Zero, (total, length) => total + length);
+    }
+
     /// <summary>A side won the game on the table; the next one starts now.</summary>
     public void Won(Side side, DateTimeOffset now)
     {

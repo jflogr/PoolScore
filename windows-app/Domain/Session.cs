@@ -62,7 +62,8 @@ public sealed record PlayedMatch(
     DateTimeOffset FinishedAt,
     GameTime[] Games)
 {
-    public TimeSpan? Duration => Timing.Between(StartedAt, FinishedAt, FinishedAt);
+    /// <summary>The race's playing time: its games added up.</summary>
+    public TimeSpan? Duration => GameLog.Sum(Games);
 }
 
 /// <summary>Whoever is scoring: the PC, or a phone by its key and the name it asked with.</summary>
@@ -385,47 +386,150 @@ public sealed class Session
             : Domain.Standings.FromHistory(Match.History, id => Roster.FirstOrDefault(player => player.Id == id)?.Name);
 
     /// <summary>
-    /// The clock on the game being played and, in a round robin, the average
-    /// set so far and when the last one should finish at that rate. The set on
-    /// now is given whatever is left of an average set, never less than none.
+    /// The match on the table - its games so far plus the one being played -
+    /// the average match, and in a round robin when the last set should
+    /// finish. Match times are rolled up from game times, so the time between
+    /// one match ending and the next being started is not counted as play.
     /// </summary>
     public Timing Pace()
     {
         var now = Now;
         if (!IsRoundRobin)
         {
-            var lengths = Match.History.Select(played => played.Duration).OfType<TimeSpan>().ToList();
-            TimeSpan? usualRace = lengths.Count > 0 ? TimeSpan.FromTicks((long)lengths.Average(length => length.Ticks)) : null;
-            var game = Match.Winner is null ? Match.Games.Current(now) : null;
-            return new Timing(Timing.Between(Match.StartedAt, Match.FinishedAt, now), usualRace, null, 0, game);
+            var usualRace = Mean(Match.History.Select(played => played.Duration));
+            return new Timing(Match.Games.Total(now), usualRace, null, 0, Match.Games.Current(now));
         }
 
         var scores = RoundRobin.Scores;
-        var played = scores
-            .Where(score => score.Committed && score.StartedAt is not null && score.FinishedAt is not null)
-            .Select(score => score.Duration(now)!.Value)
-            .ToList();
-
-        TimeSpan? average = played.Count > 0 ? TimeSpan.FromTicks((long)played.Average(length => length.Ticks)) : null;
+        var average = Mean(scores.Where(score => score.Committed).Select(score => score.Duration(now)));
         var left = scores.Count(score => !score.Committed);
-        var elapsed = CurrentSet()?.Score.Duration(now);
+        var current = CurrentSet()?.Score;
 
-        DateTimeOffset? finish = null;
-        if (average is { } usual && left > 0)
+        return new Timing(current?.Duration(now), average, Forecast(now, current, left), left, current?.Games.Current(now));
+    }
+
+    /// <summary>
+    /// When the last set should finish: the games still to play at the average
+    /// game so far, plus the usual changeover before each set yet to start.
+    /// Games to a set come from the sets played; until one is, a race is taken
+    /// to run halfway between a sweep and hill-hill. Every game and set played
+    /// feeds the averages, so the forecast firms up as the night goes on.
+    /// </summary>
+    private DateTimeOffset? Forecast(DateTimeOffset now, SetScore? current, int left)
+    {
+        var scores = RoundRobin.Scores;
+        if (left == 0) return null;
+        if (Mean(scores.SelectMany(score => score.Games.Played).Select(game => game.Duration)) is not { } perGame) return null;
+
+        var target = RoundRobin.Target;
+        var played = scores.Where(score => score.Committed).ToList();
+        var perSet = played.Count > 0 ? played.Average(score => score.RacksPlayed) : (target + (target * 2 - 1)) / 2.0;
+        var changeover = Mean(Changeovers(scores)) ?? TimeSpan.Zero;
+
+        var rest = TimeSpan.Zero;
+        var waiting = left;
+
+        if (current is { Committed: false })
         {
-            var rest = usual - (elapsed ?? TimeSpan.Zero);
-            if (rest < TimeSpan.Zero) rest = TimeSpan.Zero;
-            finish = now + rest + usual * (left - 1);
+            waiting--;
+
+            // At least the racks a side still needs; more if sets usually go longer.
+            var needed = Math.Max(0, target - Math.Max(current.Home, current.Away));
+            var gamesLeft = needed == 0 ? 0 : Math.Max(needed, perSet - current.RacksPlayed);
+            var thisSet = perGame * gamesLeft - (current.Games.Current(now) ?? TimeSpan.Zero);
+            if (thisSet > TimeSpan.Zero) rest += thisSet;
+            if (current.StartedAt is null) rest += changeover;
         }
 
-        // No game is being played once a side is over the line.
-        TimeSpan? onTable = null;
-        if (CurrentSet() is { } current && Math.Max(current.Score.Home, current.Score.Away) < RoundRobin.Target)
+        rest += (perGame * perSet + changeover) * waiting;
+        return now + rest;
+    }
+
+    /// <summary>
+    /// The gaps between one set ending and the next being started. Anything
+    /// over half an hour is a break rather than a changeover, and left out so
+    /// one meal does not push every set's forecast back.
+    /// </summary>
+    private static IEnumerable<TimeSpan?> Changeovers(IEnumerable<SetScore> scores)
+    {
+        var started = scores.Where(score => score.StartedAt is not null).OrderBy(score => score.StartedAt).ToList();
+
+        for (var i = 1; i < started.Count; i++)
         {
-            onTable = current.Score.Games.Current(now);
+            if (started[i - 1].FinishedAt is not { } finished) continue;
+
+            var gap = started[i].StartedAt!.Value - finished;
+            if (gap >= TimeSpan.Zero && gap <= TimeSpan.FromMinutes(30)) yield return gap;
+        }
+    }
+
+    private static TimeSpan? Mean(IEnumerable<TimeSpan?> lengths)
+    {
+        var known = lengths.OfType<TimeSpan>().ToList();
+        return known.Count > 0 ? TimeSpan.FromTicks((long)known.Average(length => length.Ticks)) : null;
+    }
+
+    /// <summary>
+    /// What the scoreboard's centre button says: Start before a match has
+    /// begun, then nothing while it is played, then Next match (New match in
+    /// singles and doubles) once a side has won. Null when there is nothing
+    /// to press.
+    /// </summary>
+    public string? CentreAction()
+    {
+        if (IsRoundRobin)
+        {
+            if (CurrentSet() is not { } current || current.Score.Committed) return null;
+
+            var score = current.Score;
+            var target = RoundRobin.Target;
+            if ((score.Home >= target) ^ (score.Away >= target)) return "Next match";
+            return score.StartedAt is null && score.RacksPlayed == 0 ? "Start" : null;
         }
 
-        return new Timing(elapsed, average, finish, left, onTable);
+        if (Match.Winner is not null) return "New match";
+        return Match.StartedAt is null && Match.RacksPlayed == 0 ? "Start" : null;
+    }
+
+    /// <summary>
+    /// Presses the centre button, whatever it says just now. A press that
+    /// arrives after the button has changed does nothing it was not meant to:
+    /// Start only starts, and moving on only happens once a side has won.
+    /// </summary>
+    public void PressCentre()
+    {
+        switch (CentreAction())
+        {
+            case "Start":
+                StartMatch();
+                break;
+            case "Next match":
+                TryCommit(out _);
+                break;
+            case "New match":
+                StartNewMatch();
+                break;
+        }
+    }
+
+    /// <summary>The players are at the table: the match and its first game are on the clock.</summary>
+    public void StartMatch()
+    {
+        if (CentreAction() != "Start") return;
+
+        var now = Now;
+        if (IsRoundRobin && CurrentSet() is { } current)
+        {
+            current.Score.StartedAt = now;
+            current.Score.Games.CurrentStartedAt = now;
+        }
+        else if (!IsRoundRobin)
+        {
+            Match.StartedAt = now;
+            Match.Games.CurrentStartedAt = now;
+        }
+
+        Notify();
     }
 
     /// <summary>The games log being added to now: the set on the table, or the race on the board.</summary>
@@ -539,6 +643,9 @@ public sealed class Session
 
             score.StartedAt ??= now;
             Log(score.Games, side, after > before, now);
+
+            // Won: no game is being played until the next set starts.
+            if (Math.Max(score.Home, score.Away) >= RoundRobin.Target) score.Games.CurrentStartedAt = null;
         }
         else
         {
@@ -553,6 +660,7 @@ public sealed class Session
             Match.StartedAt ??= now;
             Log(Match.Games, side, after > before, now);
             RefreshMatchWinner();
+            if (Match.Winner is not null) Match.Games.CurrentStartedAt = null;
         }
 
         Notify();
@@ -619,13 +727,8 @@ public sealed class Session
                    ?? RoundRobin.Scores.FirstOrDefault(item => !item.Committed);
         RoundRobin.CurrentSet = next?.Set;
 
-        // Next match is pressed as the next pair step up, so their clock
-        // starts now - and so does the one on their first game.
-        if (next is not null)
-        {
-            next.StartedAt ??= now;
-            if (next.RacksPlayed == 0) next.Games.CurrentStartedAt ??= now;
-        }
+        // The next set waits for its Start, so the changeover is not counted
+        // as play.
 
         Notify();
         return true;
@@ -694,10 +797,7 @@ public sealed class Session
         RecordMatch();
         ClearMatch();
 
-        // Pressed as the next race steps up to the table, so it - and its
-        // first game - are on the clock.
-        Match.StartedAt = Now;
-        Match.Games.CurrentStartedAt = Match.StartedAt;
+        // The next race waits for its Start.
         _lastRack = null;
 
         Notify();

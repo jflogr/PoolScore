@@ -3,7 +3,9 @@ using PoolScoreTracker.Domain;
 namespace PoolScoreTracker.Ui;
 
 /// <summary>
-/// A and B score the left and right sides; hold Alt to take a rack off.
+/// The left and right arrows score the left and right sides; hold Alt to take
+/// a rack off. Arrows rather than letters because they point at the side
+/// they score, so nobody has to remember which letter is which.
 ///
 /// Shared rather than owned by the main window, because a keystroke only ever
 /// reaches the window that has focus. Click the banner once - to drag it onto
@@ -16,12 +18,12 @@ internal static class Shortcuts
     public static (Side Side, int Delta)? Read(Keys keyData)
     {
         var key = keyData & Keys.KeyCode;
-        if (key is not (Keys.A or Keys.B)) return null;
+        if (key is not (Keys.Left or Keys.Right)) return null;
 
         // Ctrl and Shift belong to whatever else might be listening for them.
         if ((keyData & (Keys.Control | Keys.Shift)) != 0) return null;
 
         var delta = (keyData & Keys.Alt) == Keys.Alt ? -1 : +1;
-        return (key == Keys.A ? Side.Home : Side.Away, delta);
+        return (key == Keys.Left ? Side.Home : Side.Away, delta);
     }
 }

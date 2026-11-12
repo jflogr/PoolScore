@@ -82,12 +82,13 @@ public sealed record Snapshot(
     string? Pace,
     HistoryLine[] History,
     ClockLine Clocks,
-    GamesLine? GameTimes)
+    GamesLine? GameTimes,
+    string? Centre)
 {
     public static readonly Snapshot Waiting = new(
         0, "-", "Waiting for the scorer", "-", false,
         new ScoreLine([], [], 0, 0, 1, 1, null), [], [], null, null, [],
-        new ClockLine(null, null), null);
+        new ClockLine(null, null), null, null);
 
     /// <summary>
     /// Which game is being scored: the set in a round robin, the mode in a
@@ -123,7 +124,7 @@ public sealed record Snapshot(
             rev, session.Config.Key, BuildHeading(session),
             game, game != "-",
             score, leaders, BuildUpcoming(session), BuildSetup(session), BuildPace(session),
-            BuildHistory(session), BuildClocks(session), BuildGameTimes(session));
+            BuildHistory(session), BuildClocks(session), BuildGameTimes(session), session.CentreAction());
     }
 
     /// <summary>The match clock while the match is on, and the game clock while a game is.</summary>

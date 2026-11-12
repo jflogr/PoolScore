@@ -182,7 +182,7 @@ public sealed class MainWindow : Form
         _scoring.Height = ClientSize.Height / 2;
         _scoring.HomeDelta += (_, delta) => Score(Side.Home, delta);
         _scoring.AwayDelta += (_, delta) => Score(Side.Away, delta);
-        _scoring.ActionClicked += (_, _) => FinishSet();
+        _scoring.ActionClicked += (_, _) => PressCentre();
 
         // Docking resolves from the last control added outwards, so this reads
         // backwards: toolbar at the very top, then the scoreboard full width
@@ -260,7 +260,18 @@ public sealed class MainWindow : Form
 
             BeginInvoke(() =>
             {
-                if (_session.IsRoundRobin || Snapshot.GameFor(_session) != change.Game) return;
+                if (Snapshot.GameFor(_session) != change.Game) return;
+
+                // The centre button is for any format. It only ever does what
+                // it says at that moment - Start before a match, moving on once
+                // a side has won - so a stray tap cannot touch a game in play.
+                if (change.Change == SetupChange.Centre)
+                {
+                    _session.PressCentre();
+                    return;
+                }
+
+                if (_session.IsRoundRobin) return;
 
                 switch (change.Change)
                 {
@@ -392,14 +403,19 @@ public sealed class MainWindow : Form
     }
 
     /// <summary>
-    /// A and B add a rack to that side; hold Alt to take one off. Handled on
-    /// the form rather than on the panel so they work wherever the focus
-    /// happens to be - except in a dropdown or a field, where a letter belongs
-    /// to the control that has it.
+    /// The left and right arrows add a rack to that side; hold Alt to take one
+    /// off. Handled on the form rather than on the panel so they work wherever
+    /// the focus happens to be.
+    ///
+    /// A dropdown keeps the focus after a player or a setting is picked from
+    /// it, and would take the key too - an arrow there quietly picks another
+    /// player instead of scoring. Only typing has first call on it: a text
+    /// field, where the arrows move the cursor, or a dropdown whose list is
+    /// actually open.
     /// </summary>
     protected override bool ProcessCmdKey(ref Message message, Keys keyData)
     {
-        if (Shortcuts.Read(keyData) is { } shortcut && ActiveControl is not (ComboBox or TextBoxBase))
+        if (Shortcuts.Read(keyData) is { } shortcut && !TypingInto(ActiveControl))
         {
             Score(shortcut.Side, shortcut.Delta);
             return true;
@@ -407,6 +423,9 @@ public sealed class MainWindow : Form
 
         return base.ProcessCmdKey(ref message, keyData);
     }
+
+    private static bool TypingInto(Control? control) =>
+        control is TextBoxBase || control is ComboBox { DroppedDown: true };
 
     /// <summary>
     /// A rack from the PC - a button, a key, or a key in the banner. If it is
@@ -982,9 +1001,9 @@ public sealed class MainWindow : Form
             && session.RoundRobin.Scores.Any(score => score.Committed)
             && (current is not { } playing || (playing.Score.Home == 0 && playing.Score.Away == 0));
 
-        // The centre button only appears once a side has won, so it can say
-        // what actually happens next rather than "commit".
-        _scoring.ActionText = roundRobin ? "Next match" : "New match";
+        // The centre button says what actually happens next: Start before a
+        // match, Next match or New match once it is won, nothing in between.
+        _scoring.ActionText = session.CentreAction() ?? string.Empty;
 
         // A round robin's reset starts the whole evening again; a one-off
         // match only has the one score to clear, so say that.
@@ -992,23 +1011,11 @@ public sealed class MainWindow : Form
     }
 
     /// <summary>
-    /// The centre button: in a round robin that records the set and moves on,
-    /// in a one-off match it just clears the board for another race.
+    /// The centre button: Start puts the match on the clock; once it is won,
+    /// a round robin records the set and moves on, and a one-off match clears
+    /// the board for another race.
     /// </summary>
-    private void FinishSet()
-    {
-        if (!_session.IsRoundRobin)
-        {
-            _session.StartNewMatch();
-            return;
-        }
-
-        if (!_session.TryCommit(out var problem) && problem is not null)
-        {
-            MessageBox.Show(this, problem, "Pool Score",
-                MessageBoxButtons.OK, MessageBoxIcon.Information);
-        }
-    }
+    private void PressCentre() => _session.PressCentre();
 
     /// <summary>The roster, in its own window rather than a tab nobody needs open.</summary>
     private void ShowPlayers()

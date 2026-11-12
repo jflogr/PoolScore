@@ -26,7 +26,13 @@ public enum SetupChange
     Slot,
 
     /// <summary>Both scores back to nil-nil.</summary>
-    Clear
+    Clear,
+
+    /// <summary>
+    /// The centre button: Start before a match, Next match or New match once
+    /// a side has won. Any format; does only what the button says just then.
+    /// </summary>
+    Centre
 }
 
 /// <summary>
@@ -38,11 +44,11 @@ public sealed record PhoneSetup(string Game, SetupChange Change, Side Side, int 
 /// <summary>
 /// Serves the phone view to phones on the same wifi. Every phone can watch.
 /// A phone can also ask to score, and once somebody at the PC allows it, it
-/// can nudge the current score up or down by one rack. In a one-off match it
-/// can also set the race, pick the players and clear the scores. Never the
-/// format, and never a round robin's schedule, finishing a set or undo - so
-/// an evening's setup stays safe. <see cref="Phones"/> keeps track of who is
-/// allowed.
+/// can nudge the current score up or down by one rack, press Start, and once
+/// a side has won, move on to the next match. In a one-off match it can also set the
+/// race, pick the players and clear the scores. Never the format, and never
+/// a round robin's line-up or undo - so an evening's setup stays safe.
+/// <see cref="Phones"/> keeps track of who is allowed.
 ///
 /// The live session belongs to the UI thread and is never touched from here.
 /// The window hands over a finished <see cref="Snapshot"/> whenever something
@@ -313,6 +319,9 @@ public sealed class ScoreServer : IAsyncDisposable
                 break;
             case "clear":
                 change = SetupChange.Clear;
+                break;
+            case "centre":
+                change = SetupChange.Centre;
                 break;
             default:
                 return Results.BadRequest();

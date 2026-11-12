@@ -22,8 +22,9 @@ public sealed class SetScore(int set)
     public bool BreakSwapped { get; set; }
 
     /// <summary>
-    /// When the set got going: the moment the set before it was finished, or
-    /// its first rack if nothing started it - the first set of the night.
+    /// When the set got going: its Start, or its first rack if nobody pressed
+    /// Start. Kept for the changeover between sets; the set's own time is its
+    /// games added up.
     /// </summary>
     public DateTimeOffset? StartedAt { get; set; }
 
@@ -34,6 +35,6 @@ public sealed class SetScore(int set)
 
     public int RacksPlayed => Home + Away;
 
-    /// <summary>How long the set took, or has taken so far. Null until it starts.</summary>
-    public TimeSpan? Duration(DateTimeOffset now) => Timing.Between(StartedAt, FinishedAt, now);
+    /// <summary>The set's playing time so far: its games added up, plus the one on the table.</summary>
+    public TimeSpan? Duration(DateTimeOffset now) => Games.Total(now);
 }

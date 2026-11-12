@@ -98,7 +98,10 @@ public sealed class ScoringPanel : Control
         }
     }
 
-    /// <summary>What the centre button says when a side has won.</summary>
+    /// <summary>
+    /// What the centre button says - Start before a match, Next match or New
+    /// match once it is won - or empty while there is nothing to press.
+    /// </summary>
     [Browsable(false)]
     [DesignerSerializationVisibility(DesignerSerializationVisibility.Hidden)]
     public string ActionText
@@ -363,8 +366,8 @@ public sealed class ScoringPanel : Control
             _awayPlus = plus;
         }
 
-        var key = isHome ? "A" : "B";
-        DrawButton(g, minus, "−", $"ALT+{key}");
+        var key = isHome ? "←" : "→";
+        DrawButton(g, minus, "−", $"ALT {key}");
         DrawButton(g, plus, "+", key);
     }
 
@@ -450,12 +453,12 @@ public sealed class ScoringPanel : Control
     }
 
     /// <summary>
-    /// The one button that matters when a set is over, put where the eye
-    /// already is - between the two scores.
+    /// The one button that matters before a match and once it is over, put
+    /// where the eye already is - between the two scores.
     /// </summary>
     private void DrawAction(Graphics g, int w, int h)
     {
-        if (!_state.Decided)
+        if (_actionText.Length == 0)
         {
             _action = Rectangle.Empty;
             return;

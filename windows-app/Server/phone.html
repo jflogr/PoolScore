@@ -72,6 +72,16 @@
   .set { color: var(--muted); font-variant-numeric: tabular-nums; padding-right: 10px; }
   .took { color: var(--muted); font-size: 0.8rem; }
 
+  /* the centre button: Start, then Next match / New match once won - allowed phones only */
+  .centre { padding: 2px 16px 14px; background: var(--ink); }
+  .centre[hidden] { display: none; }
+  .centre button {
+    width: 100%; height: 52px; border: 0; border-radius: 12px;
+    background: var(--gold); color: var(--deep); font: 700 1.15rem system-ui, sans-serif;
+    touch-action: manipulation; -webkit-tap-highlight-color: transparent;
+  }
+  .centre button:active { transform: scale(0.98); }
+
   /* the clocks on the table, along the foot of the score */
   .clocks { display: flex; justify-content: center; gap: 22px; padding: 0 16px 12px; background: var(--ink);
             color: var(--muted); font-size: 0.78rem; font-weight: 700; letter-spacing: 0.08em;
@@ -171,6 +181,10 @@
         <button type="button" class="plus" id="awayPlus" aria-label="Add a rack">+</button>
       </div>
     </div>
+  </div>
+
+  <div class="centre" id="centreBar" hidden>
+    <button type="button" id="centreButton">Start</button>
   </div>
 
   <div class="clocks" id="clocks" hidden>
@@ -337,10 +351,16 @@
       .catch(() => {});
   }
 
+  // What the PC's centre button says just now - Start before a match, Next
+  // match or New match once it is won - or null while it is being played.
+  let centre = null;
+
   function showButtons() {
     const live = access === "approved" && canScore;
     $("score").classList.toggle("viewonly", !live);
     $("setupSection").hidden = !(access === "approved" && setup);
+    $("centreBar").hidden = !(access === "approved" && centre);
+    if (centre) $("centreButton").textContent = centre;
   }
 
   $("askForm").addEventListener("submit", (event) => {
@@ -432,6 +452,13 @@
   $("awayRaceDown").addEventListener("click", () => race("away", -1));
   $("awayRaceUp").addEventListener("click", () => race("away", 1));
 
+  // Any format. The PC does only what its own button says at that moment,
+  // so a tap that lands late cannot start or end the wrong thing.
+  $("centreButton").addEventListener("click", () => {
+    if (access !== "approved" || !centre) return;
+    send("api/setup", { change: "centre" });
+  });
+
   $("clearScores").addEventListener("click", () => {
     if (confirm("Clear the scores back to 0 - 0?\n\nThe players and the race are kept.")) {
       change({ change: "clear" });
@@ -521,7 +548,8 @@
     $("clocks").hidden = !showMatch && !showGame;
     $("matchClockWrap").hidden = !showMatch;
     $("gameClockWrap").hidden = !showGame;
-    if (showMatch) $("matchClock").textContent = clock(clocks.match + gone);
+    // A match's time is its games, so it only moves while a game is timed.
+    if (showMatch) $("matchClock").textContent = clock(clocks.match + (showGame ? gone : 0));
     if (showGame) $("gameClock").textContent = clock(clocks.game + gone);
   }
 
@@ -569,6 +597,7 @@
 
     game = state.game || "-";
     canScore = !!state.canScore;
+    centre = state.centre || null;
     showButtons();
 
     const s = state.score;
