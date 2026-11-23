@@ -113,6 +113,15 @@
   .pm button.plus { background: #3a4c61; border-color: #4a5e75; }
   .pm button:active:not(:disabled) { transform: scale(0.96); background: var(--gold); color: var(--deep); }
   .pm button:disabled { opacity: 0.3; }
+
+  /* the button just tapped: dots in place of the sign while it updates */
+  .pm button.updating, .pm button.updating:disabled {
+    opacity: 1; position: relative; color: transparent; background: var(--muted); border-color: var(--muted);
+  }
+  .pm button.updating::after {
+    content: "\2022\2022\2022"; position: absolute; inset: 0; display: grid; place-items: center;
+    color: var(--deep); font-size: 1.1rem; letter-spacing: 0.15em;
+  }
   .viewonly .pm { display: none; }
 
   /* ---- asking to score ---- */
@@ -391,8 +400,26 @@
     bar($(prefix + "Bar"), score, target);
     $(prefix + "Dot").classList.toggle("off", !breaking);
     $(prefix + "Side").classList.toggle("lit", onHill || won);
-    $(prefix + "Minus").disabled = !canScore || score <= 0;
-    $(prefix + "Plus").disabled = !canScore || score >= target;
+    $(prefix + "Minus").disabled = !canScore || score <= 0 || updating();
+    $(prefix + "Plus").disabled = !canScore || score >= target || updating();
+  }
+
+  // Half a second after a tap the buttons wait, so a double tap is not two
+  // racks. The PC drops one that quick from the same phone anyway; this
+  // just shows it took the first.
+  const TapGap = 500;
+  let updatingUntil = 0;
+  let lastScore = null;
+
+  function updating() { return Date.now() < updatingUntil; }
+
+  function refreshButtons() {
+    if (!lastScore) return;
+    const s = lastScore;
+    $("homeMinus").disabled = !canScore || s.homeScore <= 0 || updating();
+    $("homePlus").disabled = !canScore || s.homeScore >= s.homeTarget || updating();
+    $("awayMinus").disabled = !canScore || s.awayScore <= 0 || updating();
+    $("awayPlus").disabled = !canScore || s.awayScore >= s.awayTarget || updating();
   }
 
   // Send the game the tap was aimed at, so a tap that lands after the set has
@@ -425,7 +452,17 @@
   }
 
   function tap(sideName, delta) {
-    if (!canScore || access !== "approved") return;
+    if (!canScore || access !== "approved" || updating()) return;
+
+    const pressed = $(sideName + (delta < 0 ? "Minus" : "Plus"));
+    updatingUntil = Date.now() + TapGap;
+    pressed.classList.add("updating");
+    refreshButtons();
+    setTimeout(() => {
+      pressed.classList.remove("updating");
+      refreshButtons();
+    }, TapGap);
+
     send("api/tap", { side: sideName, delta });
   }
 
@@ -601,6 +638,7 @@
     showButtons();
 
     const s = state.score;
+    lastScore = s;
     side("home", s.home, s.homeScore, s.homeTarget, s.breaking === "home");
     side("away", s.away, s.awayScore, s.awayTarget, s.breaking === "away");
 

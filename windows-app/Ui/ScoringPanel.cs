@@ -513,16 +513,52 @@ public sealed class ScoringPanel : Control
         }
     }
 
+    // The button that has just been pressed, shown as updating for the half
+    // second a second press from the same place would be a double click.
+    private (Side Side, int Delta)? _updating;
+    private readonly System.Windows.Forms.Timer _updatingTimer = new() { Interval = 500 };
+
+    /// <summary>
+    /// Shows a press on that side's plus or minus - from a click, a key or the
+    /// banner - and holds the buttons for half a second, so a double click
+    /// cannot get in.
+    /// </summary>
+    public void Updating(Side side, int delta)
+    {
+        _updating = (side, delta);
+        _updatingTimer.Stop();
+        _updatingTimer.Tick -= EndUpdating;
+        _updatingTimer.Tick += EndUpdating;
+        _updatingTimer.Start();
+        Invalidate();
+    }
+
+    private void EndUpdating(object? sender, EventArgs e)
+    {
+        _updatingTimer.Stop();
+        _updating = null;
+        Invalidate();
+    }
+
+    private Rectangle ButtonFor(Side side, int delta) =>
+        side == Side.Home
+            ? delta < 0 ? _homeMinus : _homePlus
+            : delta < 0 ? _awayMinus : _awayPlus;
+
     private void DrawButton(Graphics g, Rectangle area, string glyph, string shortcut)
     {
         var hot = _hot == area;
+        var updating = _updating is { } press && ButtonFor(press.Side, press.Delta) == area;
         using var path = RoundedRect(area, Math.Min(area.Height, area.Width) * 0.18f);
-        using var face = new SolidBrush(hot ? ButtonHover : ButtonFace);
+        using var face = new SolidBrush(updating ? Hint : hot ? ButtonHover : ButtonFace);
         g.FillPath(face, path);
+
+        // Dots in place of the sign while it updates.
+        if (updating) glyph = "•••";
 
         using var glyphFont = new Font(FontFamily.GenericSansSerif, area.Height * 0.46f, FontStyle.Bold, GraphicsUnit.Pixel);
         var glyphSize = g.MeasureString(glyph, glyphFont);
-        using var ink = new SolidBrush(Paper);
+        using var ink = new SolidBrush(updating ? Ink : Paper);
         g.DrawString(glyph, glyphFont, ink,
             area.Left + (area.Width - glyphSize.Width) / 2f,
             area.Top + area.Height * 0.10f);
@@ -571,6 +607,9 @@ public sealed class ScoringPanel : Control
 
         // Checked first: it overlaps the bars and nothing else is under it.
         if (!_action.IsEmpty && _action.Contains(e.Location)) ActionClicked?.Invoke(this, EventArgs.Empty);
+
+        // The plus and minus wait out the half second after a press.
+        else if (_updating is not null) return;
         else if (_homeMinus.Contains(e.Location)) HomeDelta?.Invoke(this, -1);
         else if (_homePlus.Contains(e.Location)) HomeDelta?.Invoke(this, +1);
         else if (_awayMinus.Contains(e.Location)) AwayDelta?.Invoke(this, -1);

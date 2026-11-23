@@ -39,17 +39,43 @@ public sealed class GameLog
         return lengths.Count == 0 ? null : lengths.Aggregate(TimeSpan.Zero, (total, length) => total + length);
     }
 
-    /// <summary>A side won the game on the table; the next one starts now.</summary>
+    /// <summary>
+    /// Games won closer together than this were not played that fast - the
+    /// score is being caught up after it was forgotten.
+    /// </summary>
+    public static readonly TimeSpan CatchUp = TimeSpan.FromSeconds(5);
+
+    // The run of games being caught up just now: where it starts in Played,
+    // and when its last game was scored. Only matters for a few seconds, so
+    // it is not saved.
+    private int _burstFrom = -1;
+    private DateTimeOffset? _lastWonAt;
+
+    /// <summary>
+    /// A side won the game on the table; the next one starts now. Games scored
+    /// within <see cref="CatchUp"/> of each other share the time since the
+    /// first of them began, evenly - two forgotten games are not one of 15
+    /// minutes and one of a second.
+    /// </summary>
     public void Won(Side side, DateTimeOffset now)
     {
+        var catchingUp = _lastWonAt is { } previous && now - previous < CatchUp
+                         && _burstFrom >= 0 && _burstFrom < Played.Count;
+
         Played.Add(new GameTime(side, CurrentStartedAt, now));
         CurrentStartedAt = now;
+        _lastWonAt = now;
+
+        if (catchingUp) Spread(_burstFrom, now);
+        else _burstFrom = Played.Count - 1;
     }
 
     /// <summary>
     /// A rack taken off a side removes the last game it won. If that was the
     /// game just finished, it is still being played, so its clock resumes from
     /// when it really began - a wrong tap put right straight away costs nothing.
+    /// Inside a run being caught up, the games left share the run's time again,
+    /// and the game on the table starts from when the run was scored.
     /// </summary>
     public void TakeBack(Side side)
     {
@@ -57,8 +83,41 @@ public sealed class GameLog
         if (index < 0) return;
 
         var game = Played[index];
+        var inRun = _burstFrom >= 0 && _burstFrom < index && index == Played.Count - 1;
         Played.RemoveAt(index);
-        if (index == Played.Count) CurrentStartedAt = game.StartedAt;
+
+        if (inRun)
+        {
+            Spread(_burstFrom, game.FinishedAt);
+            CurrentStartedAt = game.FinishedAt;
+        }
+        else if (index == Played.Count)
+        {
+            CurrentStartedAt = game.StartedAt;
+            if (_burstFrom >= Played.Count) _burstFrom = -1;
+        }
+    }
+
+    /// <summary>
+    /// Shares the time from the first game of the run starting to <paramref name="end"/>
+    /// evenly between the run's games, in order. A run whose first game has
+    /// no start - the first game of the night - has nothing to share.
+    /// </summary>
+    private void Spread(int from, DateTimeOffset end)
+    {
+        if (Played[from].StartedAt is not { } start || end <= start) return;
+
+        var count = Played.Count - from;
+        var share = (end - start) / count;
+
+        for (var i = 0; i < count; i++)
+        {
+            Played[from + i] = Played[from + i] with
+            {
+                StartedAt = start + share * i,
+                FinishedAt = i == count - 1 ? end : start + share * (i + 1)
+            };
+        }
     }
 
     /// <summary>Drops a side's latest games until it has no more than its score - after a shorter race is set.</summary>
@@ -71,6 +130,8 @@ public sealed class GameLog
     {
         Played.Clear();
         CurrentStartedAt = null;
+        _burstFrom = -1;
+        _lastWonAt = null;
     }
 }
 

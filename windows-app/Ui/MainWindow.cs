@@ -417,7 +417,7 @@ public sealed class MainWindow : Form
     {
         if (Shortcuts.Read(keyData) is { } shortcut && !TypingInto(ActiveControl))
         {
-            Score(shortcut.Side, shortcut.Delta);
+            if (!Shortcuts.IsRepeat(message)) Score(shortcut.Side, shortcut.Delta);
             return true;
         }
 
@@ -434,6 +434,11 @@ public sealed class MainWindow : Form
     /// </summary>
     private void Score(Side side, int delta)
     {
+        // Shows on the button that it took the press, whether it came from
+        // the mouse, a key or the banner - and keeps it from being pressed
+        // again for the half second a double click is caught in.
+        _scoring.Updating(side, delta);
+
         if (_session.Adjust(side, delta, ScoreSource.Pc) is not { } refusal) return;
 
         _scoring.Notice = refusal.MessageFor(ScoreSource.Pc);
@@ -461,7 +466,7 @@ public sealed class MainWindow : Form
 
         _commands.Items.Add(Command("Players", Icons.Group, icon, ShowPlayers));
         _commands.Items.Add(Command("Swap break", Icons.SwapHoriz, icon, _session.SwapBreak));
-        _commands.Items.Add(Command("Restart game clock", Icons.Timer, icon, _session.RestartGameClock));
+        _commands.Items.Add(Command("Reset game clock", Icons.Timer, icon, _session.ResetGameClock));
         _reset = Command("Reset", Icons.RestartAlt, icon, ResetScores);
         _commands.Items.Add(_reset);
         _commands.Items.Add(_undo);

@@ -87,15 +87,15 @@ MATCH TIMES (Windows app)
 - The time so far sits at the top of the scoreboard, between the names, and
   every played set's time is in the Matches tab.
 - A line under the scoreboard gives the average match so far, how many are
-  left, and the projected finish: the games still to play at the average
-  game so far, plus the usual changeover before each set yet to start.
-  Games to a set come from the sets already played - until one is, a race is
-  taken to run halfway between a sweep and hill-hill. The changeover is the
-  gap from one set ending to the next Start; a gap over half an hour counts
-  as a break and is left out. Every game and every set played feeds those
-  averages, so the forecast firms up as the night goes on. It needs one
-  timed game. Round robins only - singles and doubles show the average
-  alone (see PLAYER STATS).
+  left, and the projected finish: the average number of games a match takes
+  times the average game time, for the matches still to play (and whatever
+  the match on the table still needs). Games to a match come from the
+  matches already played - until one is, a race is taken to run halfway
+  between a sweep and hill-hill. Time between games - a changeover, a break
+  - is not counted, the same as in the match times. Every game and every
+  match played feeds those averages, so the forecast firms up as the night
+  goes on. It needs one timed game. Round robins only - singles and doubles
+  show the average alone (see PLAYER STATS).
 - Long match (Match settings, on the right) lights the scoreboard up once a
   match runs past it: an orange frame round the scoreboard and an orange
   clock. It goes off as soon as a side wins. Off, or 20 to 45 minutes; 25 to
@@ -111,25 +111,40 @@ GAME TIMES
 - Taking a rack off undoes that game, and if it was the one just finished
   its clock picks up again from when it really started - so a wrong tap put
   right straight away costs nothing.
-- Restart game clock on the toolbar starts the game on the table again from
-  now, for when a run of taps has left it timing from the wrong moment.
+- Forgot to score and caught up with two or three quick presses? Games
+  scored within 5 seconds of each other share the time evenly, rather than
+  one getting the whole 15 minutes and the rest a second each. Taking one of
+  them back gives its share to the ones left.
+- Reset game clock on the toolbar puts the game on the table back to 0:00 -
+  for when a run of taps has left it timing from the wrong moment, or after
+  a break. The time it had is simply dropped.
 - The Matches tab lists each set's games under it - the running score, a
   tick on the side that won it, and how long it took - with the fastest,
   slowest and average game across the night along the top. Singles and
   doubles show the same under each race in the History.
 - Phones get it all too: MATCH and GAME clocks along the foot of the score,
   and the same games, with the winning side's names, under each match or
-  race. Allowed phones can press Start; Restart game clock stays at the PC.
+  race. Allowed phones can press Start; Reset game clock stays at the PC.
 
 -------------------------------------------------------------------
 NO DOUBLE-SCORING (Windows app)
 -------------------------------------------------------------------
-Once a rack is added, nobody - the PC or any phone - can add another for 5
-seconds. No rack is played that quickly, so a second plus inside it is almost
-always two people scoring the same rack. Whoever was turned away is told who
-just updated the score (on the PC across the scoreboard, on a phone under
-its score). Taking a rack off is never held up, and clears the wait, so
-fixing a tap on the wrong side is instant.
+Every change to the score is tagged with who sent it: the PC (its buttons,
+its keys and the banner all count as one), or each phone by its own name.
+
+- Someone else's plus: once a rack is added, nobody else can add one for 5
+  seconds. No rack is played that quickly, so a plus from someone else inside
+  it is two people scoring the same rack without noticing - two phones, or a
+  phone and the laptop, hitting + together. They are told who just updated
+  the score (on the PC across the scoreboard, on a phone under its score,
+  that phone only).
+- Your own clicks are never held up for long: only half a second, which
+  catches an accidental double click. The button you pressed shows dots for
+  that half second, and the plus and minus can't be pressed again until it
+  is up. A second press inside it is dropped without a word.
+- Holding an arrow key down scores once, not over and over.
+- Taking a rack off clears the 5 seconds, so a tap on the wrong side is put
+  right straight away.
 
 -------------------------------------------------------------------
 TWO WAYS TO RUN IT

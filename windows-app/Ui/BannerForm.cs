@@ -91,7 +91,7 @@ public sealed class BannerForm : Form
     {
         if (Shortcuts.Read(keyData) is { } shortcut)
         {
-            Scored?.Invoke(this, shortcut);
+            if (!Shortcuts.IsRepeat(message)) Scored?.Invoke(this, shortcut);
             return true;
         }
 

@@ -73,15 +73,15 @@ public sealed record ScoreSource(string Id, string Name)
 }
 
 /// <summary>
-/// A rack turned away because another landed moments before - almost always
-/// two people scoring the same rack. Says who got there first, so whoever
-/// was refused knows the score already has it.
+/// A rack turned away because somebody else added one moments before -
+/// almost always two people scoring the same rack. Says who got there first,
+/// so whoever was refused knows the score already has it.
 /// </summary>
 public sealed record ScoreRefusal(ScoreSource By, TimeSpan Wait)
 {
     public string MessageFor(ScoreSource asking)
     {
-        var who = asking.Id == By.Id ? "You" : char.ToUpperInvariant(By.Name[0]) + By.Name[1..];
+        var who = char.ToUpperInvariant(By.Name[0]) + By.Name[1..];
         var seconds = Math.Max(1, (int)Math.Ceiling(Wait.TotalSeconds));
         return $"{who} just updated the score. Try again in {seconds}s if that was another rack.";
     }
@@ -108,11 +108,17 @@ public sealed class Session
         ["John", "Rob", "Shane", "Jim", "Richard"];
 
     /// <summary>
-    /// How long after a rack is added before another one can be. No rack is
-    /// played in five seconds, so a second plus inside it is somebody else
-    /// scoring the same one.
+    /// How long after a rack is added before anybody else can add one. No rack
+    /// is played in five seconds, so a plus from someone else inside it is two
+    /// people scoring the same rack without noticing.
     /// </summary>
     public static readonly TimeSpan ScoreCooldown = TimeSpan.FromSeconds(5);
+
+    /// <summary>
+    /// How far apart one sender's own changes have to be. Their own taps are
+    /// never held up for long - only a double click is caught, and quietly.
+    /// </summary>
+    public static readonly TimeSpan ClickGap = TimeSpan.FromMilliseconds(500);
 
     private readonly Dictionary<string, ModeState> _modes = [];
     private Dictionary<string, string> _names = [];
@@ -120,6 +126,9 @@ public sealed class Session
 
     /// <summary>The last rack added, by whom and when. A minus clears it.</summary>
     private (ScoreSource By, DateTimeOffset At)? _lastRack;
+
+    /// <summary>When each sender - the PC, or a phone by its key - last changed the score.</summary>
+    private readonly Dictionary<string, DateTimeOffset> _lastChangeBy = new(StringComparer.Ordinal);
 
     private static DateTimeOffset Now => DateTimeOffset.Now;
 
@@ -410,10 +419,11 @@ public sealed class Session
 
     /// <summary>
     /// When the last set should finish: the games still to play at the average
-    /// game so far, plus the usual changeover before each set yet to start.
-    /// Games to a set come from the sets played; until one is, a race is taken
-    /// to run halfway between a sweep and hill-hill. Every game and set played
-    /// feeds the averages, so the forecast firms up as the night goes on.
+    /// game so far. Games to a set come from the sets played; until one is, a
+    /// race is taken to run halfway between a sweep and hill-hill. Every game
+    /// and set played feeds the averages, so the forecast firms up as the night
+    /// goes on. Time between games - a break, the changeover - is not play and
+    /// is left out, the same as it is from the match times.
     /// </summary>
     private DateTimeOffset? Forecast(DateTimeOffset now, SetScore? current, int left)
     {
@@ -424,7 +434,6 @@ public sealed class Session
         var target = RoundRobin.Target;
         var played = scores.Where(score => score.Committed).ToList();
         var perSet = played.Count > 0 ? played.Average(score => score.RacksPlayed) : (target + (target * 2 - 1)) / 2.0;
-        var changeover = Mean(Changeovers(scores)) ?? TimeSpan.Zero;
 
         var rest = TimeSpan.Zero;
         var waiting = left;
@@ -438,29 +447,10 @@ public sealed class Session
             var gamesLeft = needed == 0 ? 0 : Math.Max(needed, perSet - current.RacksPlayed);
             var thisSet = perGame * gamesLeft - (current.Games.Current(now) ?? TimeSpan.Zero);
             if (thisSet > TimeSpan.Zero) rest += thisSet;
-            if (current.StartedAt is null) rest += changeover;
         }
 
-        rest += (perGame * perSet + changeover) * waiting;
+        rest += perGame * perSet * waiting;
         return now + rest;
-    }
-
-    /// <summary>
-    /// The gaps between one set ending and the next being started. Anything
-    /// over half an hour is a break rather than a changeover, and left out so
-    /// one meal does not push every set's forecast back.
-    /// </summary>
-    private static IEnumerable<TimeSpan?> Changeovers(IEnumerable<SetScore> scores)
-    {
-        var started = scores.Where(score => score.StartedAt is not null).OrderBy(score => score.StartedAt).ToList();
-
-        for (var i = 1; i < started.Count; i++)
-        {
-            if (started[i - 1].FinishedAt is not { } finished) continue;
-
-            var gap = started[i].StartedAt!.Value - finished;
-            if (gap >= TimeSpan.Zero && gap <= TimeSpan.FromMinutes(30)) yield return gap;
-        }
     }
 
     private static TimeSpan? Mean(IEnumerable<TimeSpan?> lengths)
@@ -539,10 +529,11 @@ public sealed class Session
             : Match.Games;
 
     /// <summary>
-    /// Starts the clock on the game being played again from now - for when a
-    /// run of taps has left it timing from the wrong moment.
+    /// Puts the game being played back to 0:00 - for when a run of taps has
+    /// left it timing from the wrong moment, or after a break. Whatever time
+    /// it had is dropped rather than counted anywhere.
     /// </summary>
-    public void RestartGameClock()
+    public void ResetGameClock()
     {
         if (LiveGames() is not { } games) return;
 
@@ -617,10 +608,13 @@ public sealed class Session
     // ------------------------------------------------------- scoring moves
 
     /// <summary>
-    /// A rack on or off one side. A rack added within <see cref="ScoreCooldown"/>
-    /// of the last one is turned away, and the refusal comes back to be shown
-    /// to whoever tried; taking one off is never held up, and lets the next
-    /// plus straight through, so putting right a tap on the wrong side is not.
+    /// A rack on or off one side, from whoever sent it. A rack added by anyone
+    /// else within <see cref="ScoreCooldown"/> of the last one is turned away,
+    /// and the refusal comes back to be shown to whoever tried. A sender's own
+    /// changes only need to be <see cref="ClickGap"/> apart; one inside that is
+    /// a double click and is dropped without a word. Taking a rack off lets
+    /// the next plus straight through, so a tap on the wrong side is easy to
+    /// put right.
     /// </summary>
     public ScoreRefusal? Adjust(Side side, int delta, ScoreSource by)
     {
@@ -636,7 +630,7 @@ public sealed class Session
             var before = side == Side.Home ? score.Home : score.Away;
             var after = Math.Clamp(before + delta, 0, RoundRobin.Target);
             if (after == before) return null;
-            if (Hold(after > before, by, now) is { } refusal) return refusal;
+            if (!Allow(after > before, by, now, out var refusal)) return refusal;
 
             if (side == Side.Home) score.Home = after;
             else score.Away = after;
@@ -652,7 +646,7 @@ public sealed class Session
             var before = side == Side.Home ? Match.Home : Match.Away;
             var after = Math.Clamp(before + delta, 0, side == Side.Home ? Match.TargetHome : Match.TargetAway);
             if (after == before) return null;
-            if (Hold(after > before, by, now) is { } refusal) return refusal;
+            if (!Allow(after > before, by, now, out var refusal)) return refusal;
 
             if (side == Side.Home) Match.Home = after;
             else Match.Away = after;
@@ -673,22 +667,26 @@ public sealed class Session
         else games.TakeBack(side);
     }
 
-    /// <summary>Turns away a rack that follows the last one too closely, else records it.</summary>
-    private ScoreRefusal? Hold(bool adding, ScoreSource by, DateTimeOffset now)
+    /// <summary>
+    /// Whether this change goes through. A sender's own double click is
+    /// dropped quietly; someone else's rack inside the cooldown is refused,
+    /// with the reason. Anything let through is recorded against its sender.
+    /// </summary>
+    private bool Allow(bool adding, ScoreSource by, DateTimeOffset now, out ScoreRefusal? refusal)
     {
-        if (!adding)
+        refusal = null;
+
+        if (_lastChangeBy.TryGetValue(by.Id, out var mine) && now - mine < ClickGap) return false;
+
+        if (adding && _lastRack is { } last && last.By.Id != by.Id && now - last.At < ScoreCooldown)
         {
-            _lastRack = null;
-            return null;
+            refusal = new ScoreRefusal(last.By, ScoreCooldown - (now - last.At));
+            return false;
         }
 
-        if (_lastRack is { } last && now - last.At < ScoreCooldown)
-        {
-            return new ScoreRefusal(last.By, ScoreCooldown - (now - last.At));
-        }
-
-        _lastRack = (by, now);
-        return null;
+        _lastChangeBy[by.Id] = now;
+        _lastRack = adding ? (by, now) : null;
+        return true;
     }
 
     /// <summary>

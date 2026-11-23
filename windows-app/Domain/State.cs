@@ -23,7 +23,7 @@ public sealed class SetScore(int set)
 
     /// <summary>
     /// When the set got going: its Start, or its first rack if nobody pressed
-    /// Start. Kept for the changeover between sets; the set's own time is its
+    /// Start. Kept for the record; the set's own time is its
     /// games added up.
     /// </summary>
     public DateTimeOffset? StartedAt { get; set; }

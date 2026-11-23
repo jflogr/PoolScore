@@ -26,4 +26,11 @@ internal static class Shortcuts
         var delta = (keyData & Keys.Alt) == Keys.Alt ? -1 : +1;
         return (key == Keys.Left ? Side.Home : Side.Away, delta);
     }
+
+    /// <summary>
+    /// A key held down sends itself again and again. Only the first press
+    /// scores: Windows marks the rest as repeats (bit 30 of lParam - the key
+    /// was already down).
+    /// </summary>
+    public static bool IsRepeat(in Message message) => ((long)message.LParam & 0x40000000) != 0;
 }
